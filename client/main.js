@@ -1,5 +1,5 @@
 
-const socket = io("http://localhost:3000"); // Zmień na adres z Render po publikacji
+const socket = io("https://impostor-server-wmgt.onrender.com"); // Zmień na adres z Render po publikacji
 
 const app = document.getElementById("app");
 
