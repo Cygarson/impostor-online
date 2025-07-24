@@ -13,7 +13,6 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 
-// 📄 Wczytanie słów z pliku words.txt
 let wordList = [];
 const wordPath = path.join(__dirname, "words.txt");
 try {
@@ -53,7 +52,8 @@ io.on("connection", (socket) => {
             word: "",
             votes: [],
             guessed: false,
-            ownerId: socket.id
+            ownerId: socket.id,
+            speakOrder: []
         };
         rooms[code].players.push({ id: socket.id, nickname, color, avatar });
         OWNER[socket.id] = code;
@@ -112,6 +112,9 @@ io.on("connection", (socket) => {
             }
         }
 
+        const speakOrder = players.map(p => ({ id: p.id, nickname: p.nickname }));
+        room.speakOrder = speakOrder;
+
         players.forEach(p => {
             const isImp = impostors.includes(p.id);
             const isKam = p.id === kamikazeId;
@@ -131,6 +134,7 @@ io.on("connection", (socket) => {
         });
 
         io.to(code).emit("playerList", players);
+        io.to(code).emit("speakOrder", speakOrder);
     });
 
     socket.on("submitVote", (code, votedId) => {

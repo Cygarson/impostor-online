@@ -16,7 +16,8 @@ let state = {
     guessUsed: false,
     avatar: "",
     ownerId: "",
-    currentMode: ""
+    currentMode: "",
+    speakOrder: []
 };
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
@@ -37,7 +38,7 @@ function renderHome() {
       <input id="nickname" placeholder="Twoje imię" class="mb-2" />
       <div class="mb-2">Wybierz kolor:</div>
       <div class="flex justify-center mb-2 flex-wrap gap-2" id="colors">
-        ${["red", "blue", "green", "yellow", "purple", "orange"].map(c => `
+        ${["red", "blue", "green", "yellow", "purple", "orange", "gray"].map(c => `
           <div class="w-8 h-8 rounded-full bg-${c}-500 cursor-pointer border-2" data-color="${c}"></div>
         `).join('')}
       </div>
@@ -155,6 +156,10 @@ socket.on("playerList", players => {
     }
 });
 
+socket.on("speakOrder", (order) => {
+    state.speakOrder = order;
+});
+
 socket.on("forceLeave", () => {
     alert("👑 Właściciel pokoju opuścił grę. Zostajesz przeniesiony na stronę główną.");
     location.reload();
@@ -170,10 +175,23 @@ socket.on("yourRole", ({ knowsWord, word, isKamikaze }) => {
     renderRole();
 });
 
+function renderSpeakOrder() {
+    if (!state.speakOrder.length) return '';
+    return `
+      <div class="mb-4">
+        <h3 class="text-lg font-semibold">📢 Kolejność wypowiedzi:</h3>
+        <ol class="list-decimal list-inside text-left">
+          ${state.speakOrder.map((p, i) => `<li>${p.nickname}</li>`).join('')}
+        </ol>
+      </div>
+    `;
+}
+
 function renderRole() {
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-2xl font-bold mb-4">Twoja rola</h2>
+      ${renderSpeakOrder()}
       ${state.knowsWord ? `<p class="mb-2">✅ Znasz hasło:</p><p class="text-xl font-mono mb-4">"${state.word}"</p>` : ``}
       ${state.isImpostor ? `<p class="text-red-500 font-bold mb-4">🚨 Jesteś impostorem!</p>` : ``}
       ${state.isKamikaze ? `<p class="text-yellow-400 font-bold mb-4">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
@@ -202,6 +220,7 @@ function renderVoting() {
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-bold mb-2">🗳️ Głosuj na impostora</h2>
+      ${renderSpeakOrder()}
       <div id="voteList" class="grid grid-cols-2 gap-2 mb-4"></div>
       ${state.isImpostor && !state.guessUsed ? `
         <input id="guessInput" placeholder="Zgadnij hasło" class="mb-2 text-black" />
