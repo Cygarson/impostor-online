@@ -179,3 +179,12 @@ select {
 .hover\:bg-amber-700:hover {
     background-color: #b45309;
 }
+
+#toggleVisibility {
+    transition: all 0.3s ease;
+}
+
+    #toggleVisibility:hover {
+        transform: scale(1.1);
+        background-color: #b45309;
+    }

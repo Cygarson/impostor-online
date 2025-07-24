@@ -17,7 +17,8 @@ let state = {
     avatar: "",
     ownerId: "",
     currentMode: "",
-    speakOrder: []
+    speakOrder: [],
+    roleVisible: true
 };
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
@@ -177,6 +178,7 @@ socket.on("yourRole", ({ knowsWord, word, isKamikaze, speakOrder }) => {
     state.voted = false;
     state.guessUsed = false;
     state.speakOrder = speakOrder;
+    state.roleVisible = true;
     renderRole();
 });
 
@@ -197,18 +199,34 @@ function renderSpeakOrder() {
     `;
 }
 
+function toggleRoleVisibility() {
+    state.roleVisible = !state.roleVisible;
+    renderRole();
+}
+
 function renderRole() {
     app.innerHTML = `
-    <div class="text-center max-w-lg mx-auto">
+    <div class="text-center max-w-lg mx-auto relative" id="roleScreen">
       <h2 class="text-2xl font-bold mb-4 text-amber-300">Twoja rola</h2>
+      <button id="toggleVisibility" class="absolute top-4 right-4 p-2 bg-amber-700 rounded-full">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${state.roleVisible ? 'M15 12a3 3 0 11-6 0 3 3 0 016 0z' : 'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21'}"/>
+        </svg>
+      </button>
       ${renderSpeakOrder()}
-      ${state.knowsWord ? `
+      ${state.roleVisible ? `
+        ${state.knowsWord ? `
+          <div class="mb-4 p-3 bg-amber-800 rounded-lg">
+            <p class="text-amber-200 mb-2">✅ Znasz hasło:</p>
+            <p class="text-xl font-mono font-bold text-amber-100">"${state.word}"</p>
+          </div>` : ``}
+        ${state.isImpostor ? `<p class="text-red-400 font-bold mb-4 p-3 bg-amber-800 rounded-lg">🚨 Jesteś impostorem!</p>` : ``}
+        ${state.isKamikaze ? `<p class="text-rose-400 font-bold mb-4 p-3 bg-amber-800 rounded-lg">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
+      ` : `
         <div class="mb-4 p-3 bg-amber-800 rounded-lg">
-          <p class="text-amber-200 mb-2">✅ Znasz hasło:</p>
-          <p class="text-xl font-mono font-bold text-amber-100">"${state.word}"</p>
-        </div>` : ``}
-      ${state.isImpostor ? `<p class="text-red-400 font-bold mb-4 p-3 bg-amber-800 rounded-lg">🚨 Jesteś impostorem!</p>` : ``}
-      ${state.isKamikaze ? `<p class="text-rose-400 font-bold mb-4 p-3 bg-amber-800 rounded-lg">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
+          <p class="text-amber-200">👀 Rola ukryta</p>
+        </div>
+      `}
       <button class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded w-full mb-2" id="continueBtn">
         Rozpocznij głosowanie
       </button>
@@ -224,6 +242,7 @@ function renderRole() {
     </div>
   `;
 
+    document.getElementById("toggleVisibility").onclick = toggleRoleVisibility;
     document.getElementById("continueBtn").onclick = renderVoting;
     document.getElementById("leaveBtn").onclick = handleLeave;
 
