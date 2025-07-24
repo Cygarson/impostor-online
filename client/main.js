@@ -16,10 +16,20 @@ let state = {
     scores: {},
     guessUsed: false,
     avatar: "",
-    ownerId: ""
+    ownerId: "",
+    currentMode: ""
 };
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
+
+function modeLabel(mode) {
+    return {
+        classic: "Klasyczny",
+        double: "Podwójny",
+        chaos: "Chaos",
+        kamikaze: "Kamikaze"
+    }[mode] || "Losowy";
+}
 
 function renderLeaveButton() {
     return `<button id="leaveBtn" class="bg-red-500 mt-2">🚪 Opuść pokój</button>`;
@@ -199,21 +209,22 @@ function renderVoting() {
       ${renderLeaveButton()}
     </div>
   `;
+
     const list = document.getElementById("voteList");
     list.innerHTML = state.players
-        .filter(p => p.id !== socket.id) // 🚫 brak głosowania na siebie
+        .filter(p => p.id !== socket.id)
         .map(p => `
-        <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
-          <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
-        </button>
-      `).join('');
+      <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
+        <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
+      </button>
+    `).join('');
 
     document.querySelectorAll("[data-id]").forEach(btn => {
         btn.onclick = () => {
             if (state.voted) return;
             state.voted = true;
             socket.emit("submitVote", state.roomCode, btn.dataset.id);
-            app.innerHTML = `<p class="text-center text-lg">🕐 Czekamy na głosy pozostałych graczy...</p>`;
+            app.innerHTML = `<p class="text-center text-lg">🕐 Czekamy na głosy pozostałych graczy.</p>`;
         };
     });
 
@@ -229,14 +240,16 @@ function renderVoting() {
     }
 }
 
-socket.on("roundEnd", ({ message, round, players }) => {
+socket.on("roundEnd", ({ message, round, players, mode }) => {
     state.round = round;
     state.scores = {};
+    state.currentMode = mode;
     players.forEach(p => state.scores[p.nickname] = p.score);
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-bold mb-2">🏁 Runda ${round} zakończona</h2>
       <p class="mb-2">${message}</p>
+      <h3 class="text-md font-medium mb-1">🎮 Tryb gry: ${modeLabel(mode)}</h3>
       <h3 class="text-lg font-semibold">🎯 Punktacja:</h3>
       <ul class="mb-4">
         ${players.map(p => `
@@ -246,13 +259,29 @@ socket.on("roundEnd", ({ message, round, players }) => {
           </li>
         `).join('')}
       </ul>
-      <button id="nextBtn" class="bg-green-600">Graj dalej</button>
+      ${socket.id === state.ownerId ? `
+        <label for="modeSelect" class="block mb-2 font-medium">Zmień tryb gry:</label>
+        <select id="modeSelect" class="mb-4">
+          <option value="classic">🕵️ Klasyczny</option>
+          <option value="double">🕵️🕵️ Podwójny</option>
+          <option value="chaos">🤯 Chaos</option>
+          <option value="kamikaze">💣 Kamikaze</option>
+        </select>
+        <button id="nextBtn" class="bg-green-600">Graj dalej</button>`
+            : '<p class="text-gray-500">Czekaj na decyzję właściciela pokoju...</p>'}
       ${renderLeaveButton()}
     </div>
   `;
-    document.getElementById("nextBtn").onclick = () => {
-        socket.emit("nextRound", state.roomCode);
-    };
+
+    if (socket.id === state.ownerId) {
+        const nextBtn = document.getElementById("nextBtn");
+        nextBtn.onclick = () => {
+            const selectedMode = document.getElementById("modeSelect").value;
+            state.currentMode = selectedMode;
+            socket.emit("nextRound", state.roomCode, selectedMode);
+        };
+    }
+
     document.getElementById("leaveBtn").onclick = handleLeave;
 });
 

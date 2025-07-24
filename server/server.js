@@ -1,250 +1,228 @@
 // server.js
 const express = require("express");
 const http = require("http");
-const { Server } = require("socket.io");
 const cors = require("cors");
+const { Server } = require("socket.io");
 const fs = require("fs");
 const path = require("path");
 
 const app = express();
+app.use(cors());
 const server = http.createServer(app);
-const io = new Server(server, {
-    cors: { origin: "*", methods: ["GET", "POST"] }
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 const PORT = process.env.PORT || 3000;
-const wordList = fs.readFileSync(path.join(__dirname, "words.txt"), "utf-8").split("\n").map(w => w.trim()).filter(Boolean);
+const words = fs.readFileSync(path.join(__dirname, "words.txt"), "utf-8").split("\n").map(w => w.trim()).filter(Boolean);
 const rooms = {};
-const OWNER = {};
-const GameMode = { CLASSIC: 1, DOUBLE: 2, CHAOS: 3, CLASSIC_KAMIKAZE: 4 };
 
 function normalize(str) {
-    return str.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+  return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-io.on("connection", (socket) => {
-    console.log("🔌 Połączono:", socket.id);
+io.on("connection", socket => {
+  socket.on("createRoom", (nickname, color, mode, avatar, callback) => {
+    const code = Math.random().toString(36).substr(2, 4).toUpperCase();
+    rooms[code] = {
+      players: [],
+      gameStarted: false,
+      ownerId: socket.id,
+      round: 0,
+      scores: {},
+      word: "",
+      votes: [],
+      guessed: false,
+      forcedMode: mode !== "random" ? mode : null
+    };
+    const player = { id: socket.id, nickname, color, avatar };
+    rooms[code].players.push(player);
+    socket.join(code);
+    callback({ success: true, roomCode: code });
+    io.to(code).emit("playerList", rooms[code].players);
+  });
 
-    socket.on("createRoom", (nickname, color, mode, avatar, callback) => {
-        const code = Math.random().toString(36).slice(2, 6).toUpperCase();
-        rooms[code] = {
-            players: [],
-            gameStarted: false,
-            forcedMode: mode !== "random" ? mode : null,
-            round: 0,
-            scores: {},
-            word: "",
-            votes: [],
-            guessed: false,
-            ownerId: socket.id,
-            lastImpostors: {}
-        };
-        rooms[code].players.push({ id: socket.id, nickname, color, avatar });
-        OWNER[socket.id] = code;
-        socket.join(code);
-        callback({ success: true, roomCode: code });
-        io.to(code).emit("playerList", rooms[code].players);
-    });
+  socket.on("joinRoom", (code, nickname, color, avatar, callback) => {
+    const room = rooms[code];
+    if (!room || room.gameStarted) return callback({ success: false, error: "Pokój nie istnieje lub gra już trwa." });
+    const player = { id: socket.id, nickname, color, avatar };
+    room.players.push(player);
+    socket.join(code);
+    callback({ success: true });
+    io.to(code).emit("playerList", room.players);
+  });
 
-    socket.on("joinRoom", (code, nickname, color, avatar, callback) => {
-        const room = rooms[code];
-        if (!room) return callback({ success: false, error: "Nie ma pokoju." });
-        if (room.gameStarted) return callback({ success: false, error: "Gra już trwa." });
-        room.players.push({ id: socket.id, nickname, color, avatar });
-        socket.join(code);
-        callback({ success: true });
-        io.to(code).emit("playerList", room.players);
-    });
+  socket.on("startGame", code => {
+    const room = rooms[code];
+    if (!room || room.ownerId !== socket.id) return;
+    startGame(code, room.forcedMode || "random");
+  });
 
-    socket.on("startGame", (code) => {
-        const room = rooms[code];
-        if (!room || room.players.length < 2 || room.ownerId !== socket.id) return;
+  socket.on("nextRound", (code, modeOverride) => {
+    const room = rooms[code];
+    if (!room || socket.id !== room.ownerId) return;
+    if (modeOverride) room.forcedMode = modeOverride;
+    startGame(code, room.forcedMode || "random");
+  });
 
-        room.gameStarted = true;
-        room.votes = [];
-        room.guessed = false;
-        room.word = wordList[Math.floor(Math.random() * wordList.length)];
-        room.round++;
+  socket.on("submitVote", (code, votedId) => {
+    const room = rooms[code];
+    if (!room) return;
+    room.votes.push(votedId);
+    if (room.votes.length >= room.players.length) {
+      const voteCount = {};
+      room.votes.forEach(v => voteCount[v] = (voteCount[v] || 0) + 1);
+      const [votedOut] = Object.entries(voteCount).sort((a, b) => b[1] - a[1])[0];
+      const target = room.players.find(p => p.id === votedOut);
+      const impostors = room.players.filter(p => !p.knowsWord && !p.isKamikaze);
+      let message = "";
 
-        const modeStr = room.forcedMode;
-        const mode = modeStr === "classic" ? GameMode.CLASSIC :
-            modeStr === "double" ? GameMode.DOUBLE :
-                modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
-                    GameMode.CHAOS;
-
-        const players = room.players.slice().sort(() => Math.random() - 0.5);
-        const roles = {};
-        let impostors = [], kamikazeId = null;
-
-        function pickImpostors(count) {
-            const candidates = players.filter(p => room.lastImpostors[p.id] < 2 || room.lastImpostors[p.id] === undefined);
-            return candidates.slice(0, count).map(p => p.id);
-        }
-
-        if (mode === GameMode.CLASSIC) impostors = pickImpostors(1);
-        else if (mode === GameMode.DOUBLE) impostors = pickImpostors(2);
-        else if (mode === GameMode.CHAOS) {
-            players.forEach(p => {
-                const knows = Math.random() < 0.5;
-                roles[p.id] = { knows };
-                if (!knows) impostors.push(p.id);
-            });
-        } else if (mode === GameMode.CLASSIC_KAMIKAZE) {
-            impostors = pickImpostors(1);
-            if (players.length > 2 && Math.random() < 0.25) {
-                const rest = players.filter(p => !impostors.includes(p.id));
-                kamikazeId = rest[Math.floor(Math.random() * rest.length)].id;
-            }
-        }
-
-        players.forEach(p => {
-            const isImp = impostors.includes(p.id);
-            const isKam = p.id === kamikazeId;
-            const knows = (mode === GameMode.CHAOS ? roles[p.id].knows : isKam ? true : !isImp);
-
-            if (isImp) room.lastImpostors[p.id] = (room.lastImpostors[p.id] || 0) + 1;
-            else room.lastImpostors[p.id] = 0;
-
-            p.knowsWord = knows;
-            p.isKamikaze = isKam;
-
-            const sock = io.sockets.sockets.get(p.id);
-            if (sock) {
-                sock.emit("yourRole", {
-                    knowsWord: knows,
-                    word: knows ? room.word : undefined,
-                    isKamikaze: isKam
-                });
-            }
-        });
-
-        io.to(code).emit("playerList", players);
-    });
-
-    socket.on("submitVote", (code, votedId) => {
-        const room = rooms[code];
-        if (!room) return;
-        if (socket.id === votedId) return;
-
-        room.votes.push(votedId);
-
-        if (room.votes.length >= room.players.length) {
-            const cnt = {};
-            room.votes.forEach(id => cnt[id] = (cnt[id] || 0) + 1);
-            const votedOut = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
-            const pl = room.players.find(p => p.id === votedOut);
-            let msg = "";
-
-            const isImpostor = (p) => !p.knowsWord && !p.isKamikaze;
-            const isKamikaze = (p) => p.isKamikaze;
-
-            if (pl && isImpostor(pl)) {
-                msg = "✅ Impostor wykryty!";
-                room.players.forEach(p => {
-                    if (!isImpostor(p) && !isKamikaze(p)) {
-                        room.scores[p.id] = (room.scores[p.id] || 0) + 1;
-                    }
-                });
-            } else if (pl && isKamikaze(pl)) {
-                msg = "💣 Kamikaze wykryty!";
-                room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
-            } else {
-                msg = "❌ Głosowanie nie trafiło w impostora.";
-            }
-
-            const summary = room.players.map(p => ({
-                nickname: p.nickname,
-                color: p.color,
-                isImpostor: isImpostor(p),
-                isKamikaze: isKamikaze(p),
-                score: room.scores[p.id] || 0,
-                avatar: p.avatar || "alien.png"
-            }));
-
-            io.to(code).emit("roundEnd", {
-                message: msg,
-                round: room.round,
-                players: summary,
-                mode: room.forcedMode || "random"
-            });
-
-            room.gameStarted = false;
-            room.votes = [];
-        }
-    });
-
-    socket.on("guessWord", (code, guess) => {
-        const room = rooms[code], p = room.players.find(x => x.id === socket.id);
-        if (!room || room.guessed || !p) return;
-
-        const correct = normalize(guess) === normalize(room.word);
-        if (correct) {
+      if (target && impostors.some(p => p.id === target.id)) {
+        message = "✅ Impostor został wyrzucony!";
+        room.players.forEach(p => {
+          if (p.knowsWord && !p.isKamikaze) {
             room.scores[p.id] = (room.scores[p.id] || 0) + 1;
-        }
-
-        const summary = room.players.map(p => ({
-            nickname: p.nickname,
-            color: p.color,
-            isImpostor: !p.knowsWord && !p.isKamikaze,
-            isKamikaze: p.isKamikaze,
-            score: room.scores[p.id] || 0,
-            avatar: p.avatar || "alien.png"
-        }));
-
-        io.to(code).emit("roundEnd", {
-            message: correct ? `${p.nickname} odgadł hasło!` : `${p.nickname} pomylił się.`,
-            round: room.round,
-            players: summary,
-            mode: room.forcedMode || "random"
+          }
         });
+      } else {
+        message = "❌ Impostor nie został wyrzucony.";
+        impostors.forEach(p => {
+          room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+        });
+      }
 
-        room.gameStarted = false;
-        room.votes = [];
-        room.guessed = true;
-    });
+      endRound(code, message);
+    }
+  });
 
-    socket.on("nextRound", (code) => {
-        const room = rooms[code];
-        if (room) {
-            room.gameStarted = false;
-            room.guessed = false;
-            io.to(code).emit("playerList", room.players);
-            setTimeout(() => {
-                io.to(code).emit("startGameRequest");
-            }, 1000);
-        }
-    });
+  socket.on("guessWord", (code, guess) => {
+    const room = rooms[code];
+    if (!room || room.guessed) return;
+    const player = room.players.find(p => p.id === socket.id);
+    if (!player || player.knowsWord) return;
 
-    socket.on("leaveRoom", (code) => {
-        const room = rooms[code];
-        if (!room) return;
+    const correct = normalize(guess) === normalize(room.word);
+    room.guessed = true;
+    let message = "";
 
-        room.players = room.players.filter(p => p.id !== socket.id);
-        socket.leave(code);
+    if (correct) {
+      room.scores[player.id] = (room.scores[player.id] || 0) + 1;
+      message = `${player.nickname} odgadł hasło!`;
+    } else {
+      message = `${player.nickname} próbował odgadnąć hasło, ale się pomylił.`;
+    }
 
+    endRound(code, message);
+  });
+
+  socket.on("leaveRoom", (code) => {
+    const room = rooms[code];
+    if (!room) return;
+    room.players = room.players.filter(p => p.id !== socket.id);
+    if (room.players.length === 0 || room.ownerId === socket.id) {
+      io.to(code).emit("forceLeave");
+      delete rooms[code];
+    } else {
+      io.to(code).emit("playerList", room.players);
+    }
+  });
+
+  socket.on("disconnect", () => {
+    for (const code in rooms) {
+      const room = rooms[code];
+      const idx = room.players.findIndex(p => p.id === socket.id);
+      if (idx !== -1) {
+        room.players.splice(idx, 1);
         if (room.ownerId === socket.id) {
-            delete rooms[code];
-            Object.keys(OWNER).forEach(id => { if (OWNER[id] === code) delete OWNER[id]; });
-            io.to(code).emit("forceLeave");
+          io.to(code).emit("forceLeave");
+          delete rooms[code];
         } else {
-            io.to(code).emit("playerList", room.players);
+          io.to(code).emit("playerList", room.players);
         }
-    });
-
-    socket.on("disconnect", () => {
-        const code = OWNER[socket.id];
-        if (code && rooms[code]) {
-            delete rooms[code];
-            io.to(code).emit("forceLeave");
-        } else {
-            for (const code in rooms) {
-                const room = rooms[code];
-                room.players = room.players.filter(p => p.id !== socket.id);
-                io.to(code).emit("playerList", room.players);
-            }
-        }
-        delete OWNER[socket.id];
-    });
+      }
+    }
+  });
 });
 
-server.listen(PORT, () => console.log(`✅ Serwer na porcie ${PORT}`));
+function startGame(code, mode) {
+  const room = rooms[code];
+  if (!room) return;
+  room.round++;
+  room.votes = [];
+  room.guessed = false;
+  room.word = words[Math.floor(Math.random() * words.length)];
+  room.gameStarted = true;
+
+  const players = room.players;
+  players.forEach(p => {
+    p.knowsWord = true;
+    p.isKamikaze = false;
+  });
+
+  let impostors = [];
+
+  if (mode === "double") {
+    impostors = randomSample(players, 2);
+  } else if (mode === "chaos") {
+    const count = Math.floor(Math.random() * (players.length - 1)) + 1;
+    impostors = randomSample(players, count);
+  } else {
+    impostors = randomSample(players, 1);
+  }
+
+  impostors.forEach(p => p.knowsWord = false);
+
+  if (mode === "kamikaze" && players.length > 3) {
+    const kamikazeList = players.filter(p => p.knowsWord && !impostors.includes(p));
+    const k = kamikazeList[Math.floor(Math.random() * kamikazeList.length)];
+    if (k) k.isKamikaze = true;
+  }
+
+  players.forEach(p => {
+    const sock = io.sockets.sockets.get(p.id);
+    if (sock) {
+      sock.emit("yourRole", {
+        knowsWord: p.knowsWord,
+        word: p.knowsWord ? room.word : null,
+        isKamikaze: p.isKamikaze
+      });
+    }
+  });
+
+  io.to(code).emit("playerList", players);
+}
+
+function endRound(code, message) {
+  const room = rooms[code];
+  if (!room) return;
+
+  const result = room.players.map(p => ({
+    nickname: p.nickname,
+    color: p.color,
+    isImpostor: !p.knowsWord && !p.isKamikaze,
+    isKamikaze: p.isKamikaze,
+    score: room.scores[p.id] || 0,
+    avatar: p.avatar
+  }));
+
+  io.to(code).emit("roundEnd", {
+    message,
+    round: room.round,
+    players: result,
+    mode: room.forcedMode || "random"
+  });
+
+  room.gameStarted = false;
+  room.votes = [];
+  room.guessed = false;
+}
+
+function randomSample(arr, n) {
+  const copy = [...arr];
+  const result = [];
+  while (result.length < n && copy.length) {
+    const idx = Math.floor(Math.random() * copy.length);
+    result.push(copy.splice(idx, 1)[0]);
+  }
+  return result;
+}
+
+server.listen(PORT, () => console.log(`✅ Server running on port ${PORT}`));
