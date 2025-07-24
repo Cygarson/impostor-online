@@ -1,5 +1,7 @@
-const socket = io("https://impostor-server-wmgt.onrender.com"); // ← ZMIEŃ na swój adres z Rendera jeśli inny
+// 📌 Główna logika klienta Impostor Online
+// UWAGA: upewnij się, że w <script> masz <script src="/socket.io/socket.io.js"></script>
 
+const socket = io("https://impostor-server-wmgt.onrender.com"); // 🔁 Zmień jeśli Twój serwer ma inny adres
 const app = document.getElementById("app");
 
 let state = {
@@ -11,33 +13,33 @@ let state = {
     word: "",
     isKamikaze: false,
     voted: false,
+    isImpostor: false,
+    round: 0,
+    scores: {},
+    guessUsed: false,
 };
 
-// Widok startowy
 function renderHome() {
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h1 class="text-3xl font-bold mb-4">🎭 Impostor Online</h1>
-      <input id="nickname" placeholder="Twoje imię" class="mb-2 px-3 py-2 text-black w-full rounded" />
+      <input id="nickname" placeholder="Twoje imię" class="mb-2" />
       <div class="mb-2">Wybierz kolor:</div>
       <div class="flex justify-center mb-2 flex-wrap gap-2" id="colors">
         ${["red", "blue", "green", "yellow", "purple", "orange"].map(c => `
           <div class="w-8 h-8 rounded-full bg-${c}-500 cursor-pointer border-2" data-color="${c}"></div>
         `).join('')}
       </div>
-      <div class="mb-2">Tryb gry:</div>
-      <select id="modeSelect" class="text-black px-3 py-2 rounded w-full mb-4">
+      <select id="modeSelect">
         <option value="random">🎲 Losowy</option>
         <option value="classic">🕵️ Klasyczny (1 impostor)</option>
         <option value="double">🕵️🕵️ Podwójny impostor</option>
-        <option value="chaos">🤯 Chaos (losowe role)</option>
-        <option value="all_impostors">😈 Wszyscy impostorzy</option>
-        <option value="all_know">📢 Wszyscy znają hasło</option>
+        <option value="chaos">🤯 Chaos</option>
         <option value="kamikaze">💣 Kamikaze</option>
       </select>
-      <button id="createBtn" class="bg-green-500 px-4 py-2 rounded w-full mb-2">Stwórz pokój</button>
-      <input id="joinCode" placeholder="Kod pokoju" class="px-3 py-2 text-black w-full rounded mb-2" />
-      <button id="joinBtn" class="bg-blue-500 px-4 py-2 rounded w-full">Dołącz</button>
+      <button id="createBtn">Stwórz pokój</button>
+      <input id="joinCode" placeholder="Kod pokoju" class="mt-2" />
+      <button id="joinBtn">Dołącz</button>
     </div>
   `;
 
@@ -80,14 +82,12 @@ function renderLobby() {
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-semibold mb-2">Pokój: ${state.roomCode}</h2>
       <div id="playerList" class="grid grid-cols-2 gap-2 mb-4"></div>
-      <button id="startBtn" class="bg-green-500 px-4 py-2 rounded w-full">Rozpocznij grę</button>
+      <button id="startBtn">Rozpocznij grę</button>
     </div>
   `;
-
     document.getElementById("startBtn").onclick = () => {
         socket.emit("startGame", state.roomCode);
     };
-
     renderPlayerList(state.players);
 }
 
@@ -111,6 +111,9 @@ socket.on("yourRole", ({ knowsWord, word, isKamikaze }) => {
     state.knowsWord = knowsWord;
     state.word = word;
     state.isKamikaze = isKamikaze || false;
+    state.isImpostor = !knowsWord && !isKamikaze;
+    state.voted = false;
+    state.guessUsed = false;
     renderRole();
 });
 
@@ -118,18 +121,12 @@ function renderRole() {
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-2xl font-bold mb-4">Twoja rola</h2>
-      ${state.knowsWord
-            ? `<p class="mb-2">✅ Znasz hasło:</p><p class="text-xl font-mono mb-4">"${state.word}"</p>`
-            : `<p class="mb-4">🚨 Jesteś impostorem! Blefuj dobrze.</p>`
-        }
-      ${state.isKamikaze
-            ? `<p class="text-red-400 font-bold mb-4">💣 Jesteś Kamikaze – blefuj jak impostor!</p>`
-            : ""
-        }
-      <button class="bg-blue-500 px-4 py-2 rounded w-full" id="continueBtn">Rozpocznij dyskusję</button>
+      ${state.knowsWord ? `<p class="mb-2">✅ Znasz hasło:</p><p class="text-xl font-mono mb-4">"${state.word}"</p>` : ``}
+      ${state.isImpostor ? `<p class="text-red-500 font-bold mb-4">🚨 Jesteś impostorem!</p>` : ``}
+      ${state.isKamikaze ? `<p class="text-yellow-400 font-bold mb-4">💣 Jesteś Kamikaze! Blefuj jak impostor.</p>` : ``}
+      <button class="bg-blue-500" id="continueBtn">Rozpocznij głosowanie</button>
     </div>
   `;
-
     document.getElementById("continueBtn").onclick = renderVoting;
 }
 
@@ -138,6 +135,10 @@ function renderVoting() {
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-bold mb-2">🗳️ Głosuj na impostora</h2>
       <div id="voteList" class="grid grid-cols-2 gap-2 mb-4"></div>
+      ${state.isImpostor && !state.guessUsed ? `
+        <input id="guessInput" placeholder="Zgadnij hasło" class="mb-2 text-black" />
+        <button id="guessBtn" class="bg-yellow-500">Zgłoś hasło</button>
+      ` : ``}
     </div>
   `;
 
@@ -154,18 +155,39 @@ function renderVoting() {
             app.innerHTML = `<p class="text-center text-lg">🕐 Czekamy na głosy pozostałych graczy...</p>`;
         };
     });
+
+    if (state.isImpostor && !state.guessUsed) {
+        document.getElementById("guessBtn").onclick = () => {
+            const guess = document.getElementById("guessInput").value.trim();
+            if (!guess) return;
+            socket.emit("guessWord", state.roomCode, guess);
+            state.guessUsed = true;
+        };
+    }
 }
 
-socket.on("voteResults", ({ votedOut }) => {
+socket.on("roundEnd", ({ message, round, players }) => {
+    state.round = round;
+    state.scores = {};
+    players.forEach(p => state.scores[p.nickname] = p.score);
+
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
-      <h2 class="text-2xl font-bold mb-4">🧾 Wyniki głosowania</h2>
-      <p>Najwięcej głosów otrzymał:</p>
-      <p class="text-xl font-bold text-${votedOut.color}-400 mt-2">${votedOut.nickname}</p>
-      <p class="mt-4">${votedOut.knowsWord ? "❌ Był niewinny!" : "✅ To był impostor!"}</p>
-      <button onclick="location.reload()" class="bg-green-600 mt-6 px-4 py-2 rounded w-full">Nowa gra</button>
+      <h2 class="text-xl font-bold mb-2">🏁 Runda ${round} zakończona</h2>
+      <p class="mb-2">${message}</p>
+      <h3 class="text-lg font-semibold">🎯 Punktacja:</h3>
+      <ul class="mb-4">
+        ${players.map(p => `
+          <li class="text-${p.color}-400">${p.nickname}: ${p.score} pkt – ${p.isImpostor ? "Impostor" : p.isKamikaze ? "Kamikaze" : "Niewinny"}</li>
+        `).join('')}
+      </ul>
+      <button id="nextBtn" class="bg-green-600">Graj dalej</button>
     </div>
   `;
+    document.getElementById("nextBtn").onclick = () => {
+        socket.emit("nextRound", state.roomCode);
+        renderLobby();
+    };
 });
 
 renderHome();
