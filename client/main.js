@@ -209,15 +209,14 @@ function renderVoting() {
       ${renderLeaveButton()}
     </div>
   `;
-
     const list = document.getElementById("voteList");
     list.innerHTML = state.players
         .filter(p => p.id !== socket.id)
         .map(p => `
-      <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
-        <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
-      </button>
-    `).join('');
+        <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
+          <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
+        </button>
+      `).join('');
 
     document.querySelectorAll("[data-id]").forEach(btn => {
         btn.onclick = () => {
