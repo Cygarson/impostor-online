@@ -4,6 +4,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
@@ -12,9 +13,9 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const wordList = fs.readFileSync("words.txt", "utf-8").split("\n").map(w => w.trim()).filter(Boolean);
-const rooms = {}; // key: roomCode => value: room object
-const OWNER = {}; // key: socket.id => value: roomCode
+const wordList = fs.readFileSync(path.join(__dirname, "words.txt"), "utf-8").split("\n").map(w => w.trim()).filter(Boolean);
+const rooms = {};
+const OWNER = {};
 const GameMode = { CLASSIC: 1, DOUBLE: 2, CHAOS: 3, CLASSIC_KAMIKAZE: 4 };
 
 function normalize(str) {
@@ -36,7 +37,7 @@ io.on("connection", (socket) => {
             votes: [],
             guessed: false,
             ownerId: socket.id,
-            previousRoles: {} // id => ["imp", "inn", "kam"]
+            lastImpostors: {}
         };
         rooms[code].players.push({ id: socket.id, nickname, color, avatar });
         OWNER[socket.id] = code;
@@ -58,6 +59,7 @@ io.on("connection", (socket) => {
     socket.on("startGame", (code) => {
         const room = rooms[code];
         if (!room || room.players.length < 2 || room.ownerId !== socket.id) return;
+
         room.gameStarted = true;
         room.votes = [];
         room.guessed = false;
@@ -66,24 +68,21 @@ io.on("connection", (socket) => {
 
         const modeStr = room.forcedMode;
         const mode = modeStr === "classic" ? GameMode.CLASSIC :
-                     modeStr === "double" ? GameMode.DOUBLE :
-                     modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
-                     GameMode.CHAOS;
+            modeStr === "double" ? GameMode.DOUBLE :
+                modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
+                    GameMode.CHAOS;
 
         const players = room.players.slice().sort(() => Math.random() - 0.5);
         const roles = {};
         let impostors = [], kamikazeId = null;
 
-        const wasImpostorTooOften = (id) => {
-            const history = room.previousRoles[id] || [];
-            return history.slice(-3).filter(r => r === "imp").length >= 3;
-        };
+        function pickImpostors(count) {
+            const candidates = players.filter(p => room.lastImpostors[p.id] < 2 || room.lastImpostors[p.id] === undefined);
+            return candidates.slice(0, count).map(p => p.id);
+        }
 
-        const assignable = players.filter(p => !wasImpostorTooOften(p.id));
-        const impCandidates = assignable.length >= 1 ? assignable : players;
-
-        if (mode === GameMode.CLASSIC) impostors = [impCandidates[0].id];
-        else if (mode === GameMode.DOUBLE) impostors = [impCandidates[0].id, impCandidates[1 % impCandidates.length].id];
+        if (mode === GameMode.CLASSIC) impostors = pickImpostors(1);
+        else if (mode === GameMode.DOUBLE) impostors = pickImpostors(2);
         else if (mode === GameMode.CHAOS) {
             players.forEach(p => {
                 const knows = Math.random() < 0.5;
@@ -91,7 +90,7 @@ io.on("connection", (socket) => {
                 if (!knows) impostors.push(p.id);
             });
         } else if (mode === GameMode.CLASSIC_KAMIKAZE) {
-            impostors = [impCandidates[0].id];
+            impostors = pickImpostors(1);
             if (players.length > 2 && Math.random() < 0.25) {
                 const rest = players.filter(p => !impostors.includes(p.id));
                 kamikazeId = rest[Math.floor(Math.random() * rest.length)].id;
@@ -102,6 +101,9 @@ io.on("connection", (socket) => {
             const isImp = impostors.includes(p.id);
             const isKam = p.id === kamikazeId;
             const knows = (mode === GameMode.CHAOS ? roles[p.id].knows : isKam ? true : !isImp);
+
+            if (isImp) room.lastImpostors[p.id] = (room.lastImpostors[p.id] || 0) + 1;
+            else room.lastImpostors[p.id] = 0;
 
             p.knowsWord = knows;
             p.isKamikaze = isKam;
@@ -114,11 +116,6 @@ io.on("connection", (socket) => {
                     isKamikaze: isKam
                 });
             }
-
-            // Aktualizuj historię ról
-            const role = isKam ? "kam" : (!knows ? "imp" : "inn");
-            room.previousRoles[p.id] = room.previousRoles[p.id] || [];
-            room.previousRoles[p.id].push(role);
         });
 
         io.to(code).emit("playerList", players);
@@ -127,7 +124,6 @@ io.on("connection", (socket) => {
     socket.on("submitVote", (code, votedId) => {
         const room = rooms[code];
         if (!room) return;
-
         if (socket.id === votedId) return;
 
         room.votes.push(votedId);
@@ -136,7 +132,6 @@ io.on("connection", (socket) => {
             const cnt = {};
             room.votes.forEach(id => cnt[id] = (cnt[id] || 0) + 1);
             const votedOut = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
-
             const pl = room.players.find(p => p.id === votedOut);
             let msg = "";
 
@@ -145,7 +140,11 @@ io.on("connection", (socket) => {
 
             if (pl && isImpostor(pl)) {
                 msg = "✅ Impostor wykryty!";
-                room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+                room.players.forEach(p => {
+                    if (!isImpostor(p) && !isKamikaze(p)) {
+                        room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+                    }
+                });
             } else if (pl && isKamikaze(pl)) {
                 msg = "💣 Kamikaze wykryty!";
                 room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
@@ -165,7 +164,8 @@ io.on("connection", (socket) => {
             io.to(code).emit("roundEnd", {
                 message: msg,
                 round: room.round,
-                players: summary
+                players: summary,
+                mode: room.forcedMode || "random"
             });
 
             room.gameStarted = false;
@@ -194,12 +194,25 @@ io.on("connection", (socket) => {
         io.to(code).emit("roundEnd", {
             message: correct ? `${p.nickname} odgadł hasło!` : `${p.nickname} pomylił się.`,
             round: room.round,
-            players: summary
+            players: summary,
+            mode: room.forcedMode || "random"
         });
 
         room.gameStarted = false;
         room.votes = [];
         room.guessed = true;
+    });
+
+    socket.on("nextRound", (code) => {
+        const room = rooms[code];
+        if (room) {
+            room.gameStarted = false;
+            room.guessed = false;
+            io.to(code).emit("playerList", room.players);
+            setTimeout(() => {
+                io.to(code).emit("startGameRequest");
+            }, 1000);
+        }
     });
 
     socket.on("leaveRoom", (code) => {
@@ -215,18 +228,6 @@ io.on("connection", (socket) => {
             io.to(code).emit("forceLeave");
         } else {
             io.to(code).emit("playerList", room.players);
-        }
-    });
-
-    socket.on("nextRound", (code) => {
-        const room = rooms[code];
-        if (room) {
-            room.gameStarted = false;
-            room.guessed = false;
-            io.to(code).emit("playerList", room.players);
-            setTimeout(() => {
-                io.to(code).emit("startGameRequest");
-            }, 1000);
         }
     });
 
