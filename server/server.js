@@ -83,7 +83,6 @@ io.on("connection", (socket) => {
         room.word = wordList[Math.floor(Math.random() * wordList.length)];
         room.round++;
 
-        // Zachowaj istniejące wyniki
         room.players.forEach(player => {
             if (room.scores[player.id] === undefined) {
                 room.scores[player.id] = 0;
@@ -98,7 +97,6 @@ io.on("connection", (socket) => {
                 modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
                     GameMode.CHAOS;
 
-        // Losowe mieszanie graczy dla kolejności wypowiedzi
         const players = [...room.players];
         for (let i = players.length - 1; i > 0; i--) {
             const j = Math.floor(Math.random() * (i + 1));
@@ -112,9 +110,15 @@ io.on("connection", (socket) => {
         let impostors = [], kamikazeId = null;
 
         if (mode === GameMode.CLASSIC) {
-            impostors = [players[0].id];
+            const randomIndex = Math.floor(Math.random() * players.length);
+            impostors = [players[randomIndex].id];
         } else if (mode === GameMode.DOUBLE) {
-            impostors = [players[0].id, players[1].id];
+            const shuffled = [...players];
+            for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+            }
+            impostors = [shuffled[0].id, shuffled[1].id];
         } else if (mode === GameMode.CHAOS) {
             players.forEach(p => {
                 const knows = Math.random() < 0.5;
@@ -122,10 +126,13 @@ io.on("connection", (socket) => {
                 if (!knows) impostors.push(p.id);
             });
         } else if (mode === GameMode.CLASSIC_KAMIKAZE) {
-            impostors = [players[0].id];
+            const randomIndex = Math.floor(Math.random() * players.length);
+            impostors = [players[randomIndex].id];
+
             if (players.length > 2 && Math.random() < 0.4) {
                 const rest = players.filter(p => !impostors.includes(p.id));
-                kamikazeId = rest[Math.floor(Math.random() * rest.length)].id;
+                const kamIndex = Math.floor(Math.random() * rest.length);
+                kamikazeId = rest[kamIndex].id;
             }
         }
 
@@ -173,13 +180,11 @@ io.on("connection", (socket) => {
             if (pl && isImpostor(pl)) {
                 msg = "✅ Impostor wykryty!";
 
-                // Klasyczny: niewinni dostają punkt
                 if (room.forcedMode === "classic" || room.forcedMode === "kamikaze") {
                     room.players.filter(p => !isImpostor(p)).forEach(p => {
                         room.scores[p.id] = (room.scores[p.id] || 0) + 1;
                     });
                 }
-                // Podwójny: wszyscy oprócz głosowanego impostora
                 else if (room.forcedMode === "double") {
                     room.players.filter(p => p.id !== pl.id).forEach(p => {
                         room.scores[p.id] = (room.scores[p.id] || 0) + 1;
@@ -193,13 +198,11 @@ io.on("connection", (socket) => {
             else {
                 msg = "❌ Głosowanie nie trafiło w impostora.";
 
-                // Klasyczny: impostor dostaje punkt
                 if (room.forcedMode === "classic" || room.forcedMode === "kamikaze") {
                     room.players.filter(p => isImpostor(p)).forEach(p => {
                         room.scores[p.id] = (room.scores[p.id] || 0) + 1;
                     });
                 }
-                // Podwójny: wszyscy impostorzy dostają punkt
                 else if (room.forcedMode === "double") {
                     room.players.filter(p => isImpostor(p)).forEach(p => {
                         room.scores[p.id] = (room.scores[p.id] || 0) + 1;
