@@ -155,7 +155,6 @@ socket.on("playerList", players => {
     }
 });
 
-
 socket.on("forceLeave", () => {
     alert("👑 Właściciel pokoju opuścił grę. Zostajesz przeniesiony na stronę główną.");
     location.reload();
@@ -289,5 +288,15 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
 socket.on("startGameRequest", () => {
     socket.emit("startGame", state.roomCode, state.currentMode);
 });
+
+function modeLabel(mode) {
+    switch (mode) {
+        case "classic": return "🕵️ Klasyczny";
+        case "double": return "🕵️🕵️ Podwójny";
+        case "chaos": return "🤯 Chaos";
+        case "kamikaze": return "💣 Kamikaze";
+        default: return "🎲 Losowy";
+    }
+}
 
 renderHome();
