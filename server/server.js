@@ -60,9 +60,9 @@ io.on("connection", (socket) => {
 
         const modeStr = room.forcedMode;
         const mode = modeStr === "classic" ? GameMode.CLASSIC :
-            modeStr === "double" ? GameMode.DOUBLE :
-                modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
-                    GameMode.CHAOS;
+                     modeStr === "double" ? GameMode.DOUBLE :
+                     modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
+                     GameMode.CHAOS;
 
         const players = room.players.slice().sort(() => Math.random() - 0.5);
         const roles = {};
@@ -207,4 +207,4 @@ io.on("connection", (socket) => {
     });
 });
 
-server.listen(PORT, () => console.log(`✅ Serwer na porcie ${PORT}`));
+server.listen(PORT, () => console.log(`✅ Serwer działa na porcie ${PORT}`));
