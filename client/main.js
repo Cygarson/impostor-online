@@ -222,6 +222,14 @@ function renderRole() {
           </div>` : ``}
         ${state.isImpostor ? `<p class="text-red-400 font-bold mb-4 p-3 bg-amber-800 rounded-lg">🚨 Jesteś impostorem!</p>` : ``}
         ${state.isKamikaze ? `<p class="text-rose-400 font-bold mb-4 p-3 bg-amber-800 rounded-lg">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
+        ${state.isImpostor && !state.guessUsed ? `
+          <div class="mt-4">
+            <input id="guessInput" placeholder="Zgadnij hasło" class="w-full p-2 rounded border border-amber-300 bg-amber-800 text-amber-100 mb-2" />
+            <button id="guessBtn" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded w-full">
+              Zgłoś hasło
+            </button>
+          </div>
+        ` : ``}
       ` : `
         <div class="mb-4 p-3 bg-amber-800 rounded-lg">
           <p class="text-amber-200">👀 Rola ukryta</p>
@@ -230,14 +238,6 @@ function renderRole() {
       <button class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded w-full mb-2" id="continueBtn">
         Rozpocznij głosowanie
       </button>
-      ${state.isImpostor && !state.guessUsed ? `
-        <div class="mt-4">
-          <input id="guessInput" placeholder="Zgadnij hasło" class="w-full p-2 rounded border border-amber-300 bg-amber-800 text-amber-100 mb-2" />
-          <button id="guessBtn" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded w-full">
-            Zgłoś hasło
-          </button>
-        </div>
-      ` : ``}
       ${renderLeaveButton()}
     </div>
   `;
@@ -246,7 +246,7 @@ function renderRole() {
     document.getElementById("continueBtn").onclick = renderVoting;
     document.getElementById("leaveBtn").onclick = handleLeave;
 
-    if (state.isImpostor && !state.guessUsed) {
+    if (state.roleVisible && state.isImpostor && !state.guessUsed) {
         document.getElementById("guessBtn").onclick = () => {
             const guess = document.getElementById("guessInput").value.trim();
             if (!guess) return;
