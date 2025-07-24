@@ -16,8 +16,7 @@ let state = {
     scores: {},
     guessUsed: false,
     avatar: "",
-    ownerId: "",
-    currentMode: ""
+    ownerId: ""
 };
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
@@ -88,7 +87,6 @@ function renderHome() {
             if (res.success) {
                 state.roomCode = res.roomCode;
                 state.ownerId = socket.id;
-                state.currentMode = selectedMode;
                 renderLobby();
             } else alert(res.error);
         });
@@ -108,82 +106,37 @@ function renderHome() {
 }
 
 function renderLobby() {
-    socket.emit("getPlayers", state.roomCode);
     app.innerHTML = `
-      <div class="text-center max-w-md mx-auto">
-        <h2 class="text-xl font-bold mb-2">Kod pokoju: ${state.roomCode}</h2>
-        <p class="mb-4">Czekanie na graczy...</p>
-        <ul id="playerList" class="mb-4"></ul>
-        ${socket.id === state.ownerId ? '<button id="startBtn">▶️ Start</button>' : ""}
-        ${renderLeaveButton()}
-      </div>
-    `;
+    <div class="text-center max-w-md mx-auto">
+      <h2 class="text-xl font-semibold mb-2">Pokój: ${state.roomCode}</h2>
+      <div id="playerList" class="grid grid-cols-2 gap-4 mb-4"></div>
+      ${socket.id === state.ownerId ? '<button id="startBtn">Rozpocznij grę</button>' : '<p class="text-gray-500">Czekaj na rozpoczęcie gry...</p>'}
+      ${renderLeaveButton()}
+    </div>
+  `;
+    const btn = document.getElementById("startBtn");
+    if (btn) btn.onclick = () => {
+        if (state.players.length < 2) {
+            alert("❗ Musisz mieć co najmniej 2 graczy, aby rozpocząć grę.");
+            return;
+        }
+        socket.emit("startGame", state.roomCode);
+    };
     document.getElementById("leaveBtn").onclick = handleLeave;
-
-    if (socket.id === state.ownerId) {
-        document.getElementById("startBtn").onclick = () => {
-            socket.emit("startGame", state.roomCode);
-        };
-    }
+    renderPlayerList(state.players);
 }
 
 function renderPlayerList(players) {
     const list = document.getElementById("playerList");
     if (!list) return;
     list.innerHTML = players.map(p => `
-        <li class="text-${p.color}-400 font-bold">${p.nickname}</li>
-    `).join('');
-}
-
-function renderRole() {
-    app.innerHTML = `
-    <div class="text-center max-w-md mx-auto">
-      <h2 class="text-xl font-bold mb-4">🎭 Twoja rola:</h2>
-      <p class="text-2xl mb-2 font-bold text-${state.color}-400">${state.isImpostor ? "IMPOSTOR" : state.isKamikaze ? "KAMIKAZE" : "NIEWINNY"}</p>
-      <p class="mb-2">${state.isImpostor ? "Spróbuj zgadnąć hasło!" : "Twoje hasło to: " + state.word}</p>
-      ${state.isImpostor ? '<button id="guessBtn" class="bg-yellow-500">Zgadnij hasło</button>' : ""}
-      ${renderLeaveButton()}
+    <div class="flex items-center gap-2">
+      <img src="avatars/${p.avatar || 'alien.png'}" alt="avatar" class="w-8 h-8 rounded-full border" />
+      <span class="text-${p.color}-400 font-semibold">${p.nickname}</span>
     </div>
-  `;
-    document.getElementById("leaveBtn").onclick = handleLeave;
-    if (state.isImpostor) {
-        document.getElementById("guessBtn").onclick = () => {
-            const guess = prompt("Podaj swoje hasło:");
-            if (guess) socket.emit("guessWord", state.roomCode, guess);
-        };
-    }
-}
-
-function renderVoting(players) {
-    app.innerHTML = `
-    <div class="text-center max-w-md mx-auto">
-      <h2 class="text-xl font-bold mb-2">🗳️ Głosowanie</h2>
-      <p class="mb-4">Wybierz gracza, którego chcesz wyrzucić:</p>
-      <ul class="mb-4">
-        ${players.map(p => `
-          <li class="mb-2">
-            <button data-id="${p.id}" class="voteBtn bg-${p.color}-500">${p.nickname}</button>
-          </li>
-        `).join('')}
-      </ul>
-      ${renderLeaveButton()}
-    </div>
-  `;
-    document.querySelectorAll(".voteBtn").forEach(btn => {
-        btn.onclick = () => {
-            socket.emit("submitVote", state.roomCode, btn.dataset.id);
-        };
-    });
-    document.getElementById("leaveBtn").onclick = handleLeave;
-}
-
-function modeLabel(mode) {
-    return {
-        classic: "Klasyczny",
-        double: "Podwójny",
-        chaos: "Chaos",
-        kamikaze: "Kamikaze"
-    }[mode] || "Losowy";
+  `).join('');
+    const owner = players[0];
+    state.ownerId = owner?.id;
 }
 
 socket.on("playerList", players => {
@@ -191,28 +144,99 @@ socket.on("playerList", players => {
     renderPlayerList(players);
 });
 
-socket.on("yourRole", ({ role, word }) => {
-    state.isImpostor = role === "impostor";
-    state.isKamikaze = role === "kamikaze";
-    state.knowsWord = !state.isImpostor;
+socket.on("forceLeave", () => {
+    alert("👑 Właściciel pokoju opuścił grę. Zostajesz przeniesiony na stronę główną.");
+    location.reload();
+});
+
+socket.on("yourRole", ({ knowsWord, word, isKamikaze }) => {
+    state.knowsWord = knowsWord;
     state.word = word;
+    state.isKamikaze = isKamikaze || false;
+    state.isImpostor = !knowsWord && !isKamikaze;
+    state.voted = false;
+    state.guessUsed = false;
     renderRole();
 });
 
-socket.on("voting", players => {
-    renderVoting(players);
-});
+function renderRole() {
+    app.innerHTML = `
+    <div class="text-center max-w-md mx-auto">
+      <h2 class="text-2xl font-bold mb-4">Twoja rola</h2>
+      ${state.knowsWord ? `<p class="mb-2">✅ Znasz hasło:</p><p class="text-xl font-mono mb-4">"${state.word}"</p>` : ``}
+      ${state.isImpostor ? `<p class="text-red-500 font-bold mb-4">🚨 Jesteś impostorem!</p>` : ``}
+      ${state.isKamikaze ? `<p class="text-yellow-400 font-bold mb-4">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
+      <button class="bg-blue-500" id="continueBtn">Rozpocznij głosowanie</button>
+      ${state.isImpostor && !state.guessUsed ? `
+        <input id="guessInput" placeholder="Zgadnij hasło" class="mt-4 text-black" />
+        <button id="guessBtn" class="bg-yellow-500">Zgłoś hasło</button>
+      ` : ``}
+      ${renderLeaveButton()}
+    </div>
+  `;
+    document.getElementById("continueBtn").onclick = renderVoting;
+    document.getElementById("leaveBtn").onclick = handleLeave;
 
-socket.on("roundEnd", ({ message, round, players, mode }) => {
+    if (state.isImpostor && !state.guessUsed) {
+        document.getElementById("guessBtn").onclick = () => {
+            const guess = document.getElementById("guessInput").value.trim();
+            if (!guess) return;
+            socket.emit("guessWord", state.roomCode, guess);
+            state.guessUsed = true;
+        };
+    }
+}
+
+function renderVoting() {
+    app.innerHTML = `
+    <div class="text-center max-w-md mx-auto">
+      <h2 class="text-xl font-bold mb-2">🗳️ Głosuj na impostora</h2>
+      <div id="voteList" class="grid grid-cols-2 gap-2 mb-4"></div>
+      ${state.isImpostor && !state.guessUsed ? `
+        <input id="guessInput" placeholder="Zgadnij hasło" class="mb-2 text-black" />
+        <button id="guessBtn" class="bg-yellow-500">Zgłoś hasło</button>
+      ` : ``}
+      ${renderLeaveButton()}
+    </div>
+  `;
+    const list = document.getElementById("voteList");
+    list.innerHTML = state.players
+        .filter(p => p.id !== socket.id) // 🚫 brak głosowania na siebie
+        .map(p => `
+        <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
+          <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
+        </button>
+      `).join('');
+
+    document.querySelectorAll("[data-id]").forEach(btn => {
+        btn.onclick = () => {
+            if (state.voted) return;
+            state.voted = true;
+            socket.emit("submitVote", state.roomCode, btn.dataset.id);
+            app.innerHTML = `<p class="text-center text-lg">🕐 Czekamy na głosy pozostałych graczy...</p>`;
+        };
+    });
+
+    document.getElementById("leaveBtn").onclick = handleLeave;
+
+    if (state.isImpostor && !state.guessUsed) {
+        document.getElementById("guessBtn").onclick = () => {
+            const guess = document.getElementById("guessInput").value.trim();
+            if (!guess) return;
+            socket.emit("guessWord", state.roomCode, guess);
+            state.guessUsed = true;
+        };
+    }
+}
+
+socket.on("roundEnd", ({ message, round, players }) => {
     state.round = round;
     state.scores = {};
-    state.currentMode = mode;
     players.forEach(p => state.scores[p.nickname] = p.score);
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-bold mb-2">🏁 Runda ${round} zakończona</h2>
       <p class="mb-2">${message}</p>
-      <h3 class="text-md font-medium mb-1">🎮 Tryb gry: ${modeLabel(mode)}</h3>
       <h3 class="text-lg font-semibold">🎯 Punktacja:</h3>
       <ul class="mb-4">
         ${players.map(p => `
@@ -222,17 +246,18 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
           </li>
         `).join('')}
       </ul>
-      ${socket.id === state.ownerId ? '<button id="nextBtn" class="bg-green-600">Graj dalej</button>' : '<p class="text-gray-500">Czekaj na decyzję właściciela pokoju...</p>'}
+      <button id="nextBtn" class="bg-green-600">Graj dalej</button>
       ${renderLeaveButton()}
     </div>
   `;
-    const nextBtn = document.getElementById("nextBtn");
-    if (nextBtn) {
-        nextBtn.onclick = () => {
-            socket.emit("nextRound", state.roomCode);
-        };
-    }
+    document.getElementById("nextBtn").onclick = () => {
+        socket.emit("nextRound", state.roomCode);
+    };
     document.getElementById("leaveBtn").onclick = handleLeave;
+});
+
+socket.on("startGameRequest", () => {
+    socket.emit("startGame", state.roomCode);
 });
 
 renderHome();
