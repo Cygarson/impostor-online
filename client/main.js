@@ -33,7 +33,7 @@ function handleLeave() {
 
 function renderHome() {
     app.innerHTML = `
-    <div class="text-center max-w-md mx-auto">
+    <div class="text-center max-w-lg mx-auto">
       <h1 class="text-3xl font-bold mb-4">🎭 Impostor Online</h1>
       <input id="nickname" placeholder="Twoje imię" class="mb-2 w-full p-2 rounded border border-amber-300 bg-amber-50 text-amber-800" />
       <div class="mb-2 text-amber-200">Wybierz kolor:</div>
@@ -106,7 +106,7 @@ function renderHome() {
 
 function renderLobby() {
     app.innerHTML = `
-    <div class="text-center max-w-md mx-auto">
+    <div class="text-center max-w-lg mx-auto">
       <h2 class="text-2xl font-bold mb-4 text-amber-300">Pokój: ${state.roomCode}</h2>
       <div class="flex justify-between items-center mb-4">
         <span id="playerCounter" class="text-amber-200">👥 Graczy: ${state.players.length}</span>
@@ -164,22 +164,19 @@ socket.on("playerList", players => {
     }
 });
 
-socket.on("speakOrder", (order) => {
-    state.speakOrder = order;
-});
-
 socket.on("forceLeave", () => {
     alert("👑 Właściciel pokoju opuścił grę. Zostajesz przeniesiony na stronę główną.");
     location.reload();
 });
 
-socket.on("yourRole", ({ knowsWord, word, isKamikaze }) => {
+socket.on("yourRole", ({ knowsWord, word, isKamikaze, speakOrder }) => {
     state.knowsWord = knowsWord;
     state.word = word;
     state.isKamikaze = isKamikaze || false;
     state.isImpostor = !knowsWord && !isKamikaze;
     state.voted = false;
     state.guessUsed = false;
+    state.speakOrder = speakOrder;
     renderRole();
 });
 
@@ -202,7 +199,7 @@ function renderSpeakOrder() {
 
 function renderRole() {
     app.innerHTML = `
-    <div class="text-center max-w-md mx-auto">
+    <div class="text-center max-w-lg mx-auto">
       <h2 class="text-2xl font-bold mb-4 text-amber-300">Twoja rola</h2>
       ${renderSpeakOrder()}
       ${state.knowsWord ? `
@@ -242,7 +239,7 @@ function renderRole() {
 
 function renderVoting() {
     app.innerHTML = `
-    <div class="text-center max-w-md mx-auto">
+    <div class="text-center max-w-lg mx-auto">
       <h2 class="text-xl font-bold mb-2 text-amber-300">🗳️ Głosuj na impostora</h2>
       ${renderSpeakOrder()}
       <div id="voteList" class="grid grid-cols-2 gap-3 mb-4"></div>
@@ -298,7 +295,7 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
     players.forEach(p => state.scores[p.nickname] = p.score);
 
     app.innerHTML = `
-    <div class="text-center max-w-md mx-auto">
+    <div class="text-center max-w-lg mx-auto">
       <h2 class="text-xl font-bold mb-2 text-amber-300">🏁 Runda ${round} zakończona</h2>
       <p class="mb-4 p-3 rounded-lg ${message.includes('✅') ? 'bg-green-900 text-green-300' : message.includes('❌') ? 'bg-red-900 text-red-300' : 'bg-amber-800 text-amber-300'}">${message}</p>
       <h3 class="text-md font-medium mb-1 text-amber-200">🎮 Tryb gry: ${modeLabel(mode)}</h3>

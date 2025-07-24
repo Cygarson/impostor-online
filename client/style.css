@@ -1,13 +1,19 @@
-﻿\body {
+﻿body {
     background-color: #1a120b;
     color: #e5e5cb;
     font-family: 'Segoe UI', sans-serif;
     display: flex;
     justify-content: center;
     align-items: center;
-    padding: 2rem;
     min-height: 100vh;
+    margin: 0;
+    padding: 1rem;
     text-align: center;
+}
+
+#app {
+    width: 100%;
+    max-width: 36rem;
 }
 
 input, select, button {

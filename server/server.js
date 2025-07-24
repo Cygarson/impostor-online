@@ -98,7 +98,16 @@ io.on("connection", (socket) => {
                 modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
                     GameMode.CHAOS;
 
-        const players = room.players.slice().sort(() => Math.random() - 0.5);
+        // Losowe mieszanie graczy dla kolejności wypowiedzi
+        const players = [...room.players];
+        for (let i = players.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [players[i], players[j]] = [players[j], players[i]];
+        }
+
+        const speakOrder = players.map(p => ({ id: p.id, nickname: p.nickname }));
+        room.speakOrder = speakOrder;
+
         const roles = {};
         let impostors = [], kamikazeId = null;
 
@@ -120,9 +129,6 @@ io.on("connection", (socket) => {
             }
         }
 
-        const speakOrder = players.map(p => ({ id: p.id, nickname: p.nickname }));
-        room.speakOrder = speakOrder;
-
         players.forEach(p => {
             const isImp = impostors.includes(p.id);
             const isKam = p.id === kamikazeId;
@@ -136,13 +142,13 @@ io.on("connection", (socket) => {
                 sock.emit("yourRole", {
                     knowsWord: knows,
                     word: knows ? room.word : undefined,
-                    isKamikaze: isKam
+                    isKamikaze: isKam,
+                    speakOrder: speakOrder
                 });
             }
         });
 
         io.to(code).emit("playerList", players);
-        io.to(code).emit("speakOrder", speakOrder);
     });
 
     socket.on("submitVote", (code, votedId) => {
