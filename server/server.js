@@ -1,137 +1,135 @@
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
 
 const app = express();
-app.use(cors());
-
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: {
-    origin: "*"
-  }
+    cors: {
+        origin: "*", // Umożliwia połączenie z Vercel
+        methods: ["GET", "POST"]
+    }
 });
 
+const PORT = process.env.PORT || 3000;
+
 const rooms = {};
+const wordList = ["pizza", "samochód", "komputer", "muzyka", "pies", "telefon", "chleb", "książka", "miasto", "pilot"];
 
-function getRandomWord() {
-  const words = ["pizza", "kot", "rower", "krokodyl", "programista", "muzyka"];
-  return words[Math.floor(Math.random() * words.length)];
-}
+const GameMode = {
+    CLASSIC: 1,
+    DOUBLE: 2,
+    CHAOS: 3,
+    ALL_IMPOSTORS: 4,
+    ALL_KNOW: 5,
+    CLASSIC_KAMIKAZE: 6
+};
 
-function getRandomMode(numPlayers) {
-  if (numPlayers >= 4 && Math.random() < 0.3) return "DOUBLE_IMPOSTOR";
-  if (Math.random() < 0.1) return "ALL_IMPOSTORS";
-  if (Math.random() < 0.1) return "ALL_KNOW_WORD";
-  if (Math.random() < 0.1) return "CHAOS_RANDOM";
-  return "CLASSIC_ONE_IMPOSTOR";
+function getRandomGameMode(playerCount) {
+    const modes = [GameMode.CLASSIC, GameMode.CHAOS, GameMode.ALL_KNOW, GameMode.ALL_IMPOSTORS];
+    if (playerCount >= 4) modes.push(GameMode.DOUBLE);
+    modes.push(GameMode.CLASSIC_KAMIKAZE);
+    return modes[Math.floor(Math.random() * modes.length)];
 }
 
 io.on("connection", (socket) => {
-  socket.on("createRoom", (nickname, color, callback) => {
-    const roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
-    rooms[roomCode] = {
-      players: [],
-      started: false,
-      votes: {},
-    };
-    joinRoom(socket, roomCode, nickname, color, callback);
-  });
+    console.log("Nowe połączenie:", socket.id);
 
-  socket.on("joinRoom", (roomCode, nickname, color, callback) => {
-    if (!rooms[roomCode]) {
-      callback({ success: false, error: "Pokój nie istnieje" });
-      return;
-    }
-    joinRoom(socket, roomCode, nickname, color, callback);
-  });
-
-  function joinRoom(socket, roomCode, nickname, color, callback) {
-    socket.join(roomCode);
-    const player = { id: socket.id, nickname, color, knowsWord: false };
-    rooms[roomCode].players.push(player);
-    io.to(roomCode).emit("playerList", rooms[roomCode].players);
-    callback({ success: true, roomCode });
-  }
-
-  socket.on("startGame", (roomCode) => {
-    const room = rooms[roomCode];
-    if (!room || room.started) return;
-
-    const players = room.players;
-    const word = getRandomWord();
-    const mode = getRandomMode(players.length);
-
-    let shuffled = [...players].sort(() => 0.5 - Math.random());
-
-    switch (mode) {
-      case "CLASSIC_ONE_IMPOSTOR":
-        shuffled[0].knowsWord = false;
-        shuffled.slice(1).forEach(p => p.knowsWord = true);
-        break;
-      case "DOUBLE_IMPOSTOR":
-        shuffled.slice(0, 2).forEach(p => p.knowsWord = false);
-        shuffled.slice(2).forEach(p => p.knowsWord = true);
-        break;
-      case "ALL_IMPOSTORS":
-        players.forEach(p => p.knowsWord = false);
-        break;
-      case "ALL_KNOW_WORD":
-        players.forEach(p => p.knowsWord = true);
-        break;
-      case "CHAOS_RANDOM":
-        players.forEach(p => p.knowsWord = Math.random() < 0.5);
-        break;
-    }
-
-    room.started = true;
-    room.secretWord = word;
-    room.votes = {};
-
-    players.forEach(p => {
-      io.to(p.id).emit("yourRole", {
-        knowsWord: p.knowsWord,
-        word: p.knowsWord ? word : null,
-      });
+    socket.on("createRoom", (nickname, color, callback) => {
+        const roomCode = Math.random().toString(36).substring(2, 6).toUpperCase();
+        rooms[roomCode] = {
+            players: [],
+            gameStarted: false
+        };
+        const player = { id: socket.id, nickname, color };
+        rooms[roomCode].players.push(player);
+        socket.join(roomCode);
+        callback({ success: true, roomCode });
+        io.to(roomCode).emit("playerList", rooms[roomCode].players);
     });
 
-    io.to(roomCode).emit("gameStarted");
-  });
+    socket.on("joinRoom", (roomCode, nickname, color, callback) => {
+        const room = rooms[roomCode];
+        if (!room) return callback({ success: false, error: "Nie ma takiego pokoju." });
+        if (room.gameStarted) return callback({ success: false, error: "Gra już się rozpoczęła." });
 
-  socket.on("submitVote", (roomCode, votedId) => {
-    const room = rooms[roomCode];
-    if (!room || !room.started) return;
-    room.votes[socket.id] = votedId;
+        const player = { id: socket.id, nickname, color };
+        room.players.push(player);
+        socket.join(roomCode);
+        callback({ success: true });
+        io.to(roomCode).emit("playerList", room.players);
+    });
 
-    if (Object.keys(room.votes).length === room.players.length) {
-      const voteCounts = {};
-      Object.values(room.votes).forEach(id => {
-        voteCounts[id] = (voteCounts[id] || 0) + 1;
-      });
+    socket.on("startGame", (roomCode) => {
+        const room = rooms[roomCode];
+        if (!room || room.players.length < 3) return;
+        room.gameStarted = true;
 
-      const [mostVoted] = Object.entries(voteCounts).sort((a, b) => b[1] - a[1])[0];
-      const votedPlayer = room.players.find(p => p.id === mostVoted);
+        const players = room.players;
+        const secretWord = wordList[Math.floor(Math.random() * wordList.length)];
+        const mode = getRandomGameMode(players.length);
 
-      io.to(roomCode).emit("voteResults", {
-        votedOut: votedPlayer,
-        allVotes: room.votes,
-      });
+        // Losowanie ról
+        const shuffled = [...players];
+        shuffled.sort(() => Math.random() - 0.5);
 
-      room.started = false;
-    }
-  });
+        const roles = {};
+        let kamikazeId = null;
 
-  socket.on("disconnect", () => {
-    for (const [roomCode, room] of Object.entries(rooms)) {
-      room.players = room.players.filter(p => p.id !== socket.id);
-      if (room.players.length === 0) delete rooms[roomCode];
-      else io.to(roomCode).emit("playerList", room.players);
-    }
-  });
+        if (mode === GameMode.CLASSIC) {
+            roles[shuffled[0].id] = { knowsWord: false };
+            for (let i = 1; i < players.length; i++) {
+                roles[shuffled[i].id] = { knowsWord: true };
+            }
+        } else if (mode === GameMode.DOUBLE) {
+            roles[shuffled[0].id] = { knowsWord: false };
+            roles[shuffled[1].id] = { knowsWord: false };
+            for (let i = 2; i < players.length; i++) {
+                roles[shuffled[i].id] = { knowsWord: true };
+            }
+        } else if (mode === GameMode.ALL_IMPOSTORS) {
+            players.forEach(p => roles[p.id] = { knowsWord: false });
+        } else if (mode === GameMode.ALL_KNOW) {
+            players.forEach(p => roles[p.id] = { knowsWord: true });
+        } else if (mode === GameMode.CHAOS) {
+            players.forEach(p => roles[p.id] = { knowsWord: Math.random() < 0.5 });
+        } else if (mode === GameMode.CLASSIC_KAMIKAZE) {
+            roles[shuffled[0].id] = { knowsWord: false };
+            for (let i = 1; i < players.length; i++) {
+                roles[shuffled[i].id] = { knowsWord: true };
+            }
+            if (Math.random() < 0.2) {
+                const innocent = shuffled.slice(1);
+                kamikazeId = innocent[Math.floor(Math.random() * innocent.length)].id;
+            }
+        }
+
+        players.forEach(p => {
+            const role = roles[p.id];
+            const socketPlayer = io.sockets.sockets.get(p.id);
+            if (socketPlayer) {
+                socketPlayer.emit("yourRole", {
+                    knowsWord: role.knowsWord,
+                    word: role.knowsWord ? secretWord : undefined,
+                    isKamikaze: p.id === kamikazeId
+                });
+            }
+        });
+    });
+
+    socket.on("disconnect", () => {
+        for (const code in rooms) {
+            const room = rooms[code];
+            const index = room.players.findIndex(p => p.id === socket.id);
+            if (index !== -1) {
+                room.players.splice(index, 1);
+                io.to(code).emit("playerList", room.players);
+            }
+        }
+    });
 });
 
-server.listen(3000, () => {
-  console.log("Serwer działa na http://localhost:3000");
+server.listen(PORT, () => {
+    console.log(`✅ Serwer działa na porcie ${PORT}`);
 });
