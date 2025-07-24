@@ -3,6 +3,7 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const fs = require("fs");
 
 const app = express();
 const server = http.createServer(app);
@@ -11,7 +12,7 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const wordList = ["pizza", "samochód", "komputer", "muzyka", "pies", "telefon", "chleb", "książka", "miasto", "pilot"];
+const wordList = fs.readFileSync("words.txt", "utf-8").split("\n").map(w => w.trim()).filter(Boolean);
 const rooms = {}; // key: roomCode => value: room object
 const OWNER = {}; // key: socket.id => value: roomCode
 const GameMode = { CLASSIC: 1, DOUBLE: 2, CHAOS: 3, CLASSIC_KAMIKAZE: 4 };
@@ -34,7 +35,8 @@ io.on("connection", (socket) => {
             word: "",
             votes: [],
             guessed: false,
-            ownerId: socket.id
+            ownerId: socket.id,
+            previousRoles: {} // id => ["imp", "inn", "kam"]
         };
         rooms[code].players.push({ id: socket.id, nickname, color, avatar });
         OWNER[socket.id] = code;
@@ -72,8 +74,16 @@ io.on("connection", (socket) => {
         const roles = {};
         let impostors = [], kamikazeId = null;
 
-        if (mode === GameMode.CLASSIC) impostors = [players[0].id];
-        else if (mode === GameMode.DOUBLE) impostors = [players[0].id, players[1].id];
+        const wasImpostorTooOften = (id) => {
+            const history = room.previousRoles[id] || [];
+            return history.slice(-3).filter(r => r === "imp").length >= 3;
+        };
+
+        const assignable = players.filter(p => !wasImpostorTooOften(p.id));
+        const impCandidates = assignable.length >= 1 ? assignable : players;
+
+        if (mode === GameMode.CLASSIC) impostors = [impCandidates[0].id];
+        else if (mode === GameMode.DOUBLE) impostors = [impCandidates[0].id, impCandidates[1 % impCandidates.length].id];
         else if (mode === GameMode.CHAOS) {
             players.forEach(p => {
                 const knows = Math.random() < 0.5;
@@ -81,7 +91,7 @@ io.on("connection", (socket) => {
                 if (!knows) impostors.push(p.id);
             });
         } else if (mode === GameMode.CLASSIC_KAMIKAZE) {
-            impostors = [players[0].id];
+            impostors = [impCandidates[0].id];
             if (players.length > 2 && Math.random() < 0.25) {
                 const rest = players.filter(p => !impostors.includes(p.id));
                 kamikazeId = rest[Math.floor(Math.random() * rest.length)].id;
@@ -104,6 +114,11 @@ io.on("connection", (socket) => {
                     isKamikaze: isKam
                 });
             }
+
+            // Aktualizuj historię ról
+            const role = isKam ? "kam" : (!knows ? "imp" : "inn");
+            room.previousRoles[p.id] = room.previousRoles[p.id] || [];
+            room.previousRoles[p.id].push(role);
         });
 
         io.to(code).emit("playerList", players);
@@ -113,7 +128,7 @@ io.on("connection", (socket) => {
         const room = rooms[code];
         if (!room) return;
 
-        if (socket.id === votedId) return; // 🚫 nie głosujemy na siebie
+        if (socket.id === votedId) return;
 
         room.votes.push(votedId);
 
@@ -133,7 +148,7 @@ io.on("connection", (socket) => {
                 room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
             } else if (pl && isKamikaze(pl)) {
                 msg = "💣 Kamikaze wykryty!";
-                room.scores[pl.id] = (room.scores[pl.id] || 0) + 1; // punkt dla kamikaze
+                room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
             } else {
                 msg = "❌ Głosowanie nie trafiło w impostora.";
             }
@@ -195,7 +210,6 @@ io.on("connection", (socket) => {
         socket.leave(code);
 
         if (room.ownerId === socket.id) {
-            // Właściciel wychodzi -> wywal wszystkich
             delete rooms[code];
             Object.keys(OWNER).forEach(id => { if (OWNER[id] === code) delete OWNER[id]; });
             io.to(code).emit("forceLeave");

@@ -191,6 +191,8 @@ function renderVoting() {
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-bold mb-2">🗳️ Głosuj na impostora</h2>
+      ${!state.isImpostor ? `<p class="mb-2 text-green-500">✅ Twoja rola: Niewinny<br>Hasło: <span class="font-mono">\"${state.word}\"</span></p>` : `<p class="text-red-500 mb-2">🚨 Twoja rola: Impostor</p>`}
+      ${state.isKamikaze ? `<p class="text-yellow-500 mb-2">💣 Jesteś Kamikaze</p>` : ""}
       <div id="voteList" class="grid grid-cols-2 gap-2 mb-4"></div>
       ${state.isImpostor && !state.guessUsed ? `
         <input id="guessInput" placeholder="Zgadnij hasło" class="mb-2 text-black" />
@@ -201,7 +203,7 @@ function renderVoting() {
   `;
     const list = document.getElementById("voteList");
     list.innerHTML = state.players
-        .filter(p => p.id !== socket.id) // 🚫 brak głosowania na siebie
+        .filter(p => p.id !== socket.id)
         .map(p => `
         <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
           <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
@@ -246,13 +248,16 @@ socket.on("roundEnd", ({ message, round, players }) => {
           </li>
         `).join('')}
       </ul>
-      <button id="nextBtn" class="bg-green-600">Graj dalej</button>
+      ${socket.id === state.ownerId ? '<button id="nextBtn" class="bg-green-600">Graj dalej</button>' : '<p class="text-gray-500">Czekaj na decyzję właściciela pokoju...</p>'}
       ${renderLeaveButton()}
     </div>
   `;
-    document.getElementById("nextBtn").onclick = () => {
-        socket.emit("nextRound", state.roomCode);
-    };
+    const nextBtn = document.getElementById("nextBtn");
+    if (nextBtn) {
+        nextBtn.onclick = () => {
+            socket.emit("nextRound", state.roomCode);
+        };
+    }
     document.getElementById("leaveBtn").onclick = handleLeave;
 });
 
