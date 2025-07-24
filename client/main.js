@@ -1,3 +1,4 @@
+// main.js
 const socket = io("https://impostor-server-wmgt.onrender.com");
 const app = document.getElementById("app");
 
@@ -15,6 +16,7 @@ let state = {
     scores: {},
     guessUsed: false,
     avatar: "",
+    ownerId: ""
 };
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
@@ -84,6 +86,7 @@ function renderHome() {
         socket.emit("createRoom", nickname, state.color, selectedMode, state.avatar, (res) => {
             if (res.success) {
                 state.roomCode = res.roomCode;
+                state.ownerId = socket.id;
                 renderLobby();
             } else alert(res.error);
         });
@@ -107,11 +110,12 @@ function renderLobby() {
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-semibold mb-2">Pokój: ${state.roomCode}</h2>
       <div id="playerList" class="grid grid-cols-2 gap-4 mb-4"></div>
-      <button id="startBtn">Rozpocznij grę</button>
+      ${socket.id === state.ownerId ? '<button id="startBtn">Rozpocznij grę</button>' : '<p class="text-gray-500">Czekaj na rozpoczęcie gry...</p>'}
       ${renderLeaveButton()}
     </div>
   `;
-    document.getElementById("startBtn").onclick = () => {
+    const btn = document.getElementById("startBtn");
+    if (btn) btn.onclick = () => {
         if (state.players.length < 2) {
             alert("❗ Musisz mieć co najmniej 2 graczy, aby rozpocząć grę.");
             return;
@@ -131,11 +135,18 @@ function renderPlayerList(players) {
       <span class="text-${p.color}-400 font-semibold">${p.nickname}</span>
     </div>
   `).join('');
+    const owner = players[0];
+    state.ownerId = owner?.id;
 }
 
 socket.on("playerList", players => {
     state.players = players;
     renderPlayerList(players);
+});
+
+socket.on("forceLeave", () => {
+    alert("👑 Właściciel pokoju opuścił grę. Zostajesz przeniesiony na stronę główną.");
+    location.reload();
 });
 
 socket.on("yourRole", ({ knowsWord, word, isKamikaze }) => {
@@ -189,11 +200,14 @@ function renderVoting() {
     </div>
   `;
     const list = document.getElementById("voteList");
-    list.innerHTML = state.players.map(p => `
-    <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
-      <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
-    </button>
-  `).join('');
+    list.innerHTML = state.players
+        .filter(p => p.id !== socket.id) // 🚫 brak głosowania na siebie
+        .map(p => `
+        <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
+          <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
+        </button>
+      `).join('');
+
     document.querySelectorAll("[data-id]").forEach(btn => {
         btn.onclick = () => {
             if (state.voted) return;
@@ -204,6 +218,7 @@ function renderVoting() {
     });
 
     document.getElementById("leaveBtn").onclick = handleLeave;
+
     if (state.isImpostor && !state.guessUsed) {
         document.getElementById("guessBtn").onclick = () => {
             const guess = document.getElementById("guessInput").value.trim();

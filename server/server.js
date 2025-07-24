@@ -1,3 +1,4 @@
+// server.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -11,11 +12,12 @@ const io = new Server(server, {
 
 const PORT = process.env.PORT || 3000;
 const wordList = ["pizza", "samochód", "komputer", "muzyka", "pies", "telefon", "chleb", "książka", "miasto", "pilot"];
-const rooms = {};
+const rooms = {}; // key: roomCode => value: room object
+const OWNER = {}; // key: socket.id => value: roomCode
 const GameMode = { CLASSIC: 1, DOUBLE: 2, CHAOS: 3, CLASSIC_KAMIKAZE: 4 };
 
 function normalize(str) {
-    return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    return str.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
 }
 
 io.on("connection", (socket) => {
@@ -31,9 +33,11 @@ io.on("connection", (socket) => {
             scores: {},
             word: "",
             votes: [],
-            guessed: false
+            guessed: false,
+            ownerId: socket.id
         };
         rooms[code].players.push({ id: socket.id, nickname, color, avatar });
+        OWNER[socket.id] = code;
         socket.join(code);
         callback({ success: true, roomCode: code });
         io.to(code).emit("playerList", rooms[code].players);
@@ -51,7 +55,7 @@ io.on("connection", (socket) => {
 
     socket.on("startGame", (code) => {
         const room = rooms[code];
-        if (!room || room.players.length < 2) return; // 👈 Umożliwia start od 2 graczy
+        if (!room || room.players.length < 2 || room.ownerId !== socket.id) return;
         room.gameStarted = true;
         room.votes = [];
         room.guessed = false;
@@ -78,8 +82,10 @@ io.on("connection", (socket) => {
             });
         } else if (mode === GameMode.CLASSIC_KAMIKAZE) {
             impostors = [players[0].id];
-            const cand = players.slice(1);
-            if (cand.length) kamikazeId = cand[Math.floor(Math.random() * cand.length)].id;
+            if (players.length > 2 && Math.random() < 0.25) {
+                const rest = players.filter(p => !impostors.includes(p.id));
+                kamikazeId = rest[Math.floor(Math.random() * rest.length)].id;
+            }
         }
 
         players.forEach(p => {
@@ -107,6 +113,8 @@ io.on("connection", (socket) => {
         const room = rooms[code];
         if (!room) return;
 
+        if (socket.id === votedId) return; // 🚫 nie głosujemy na siebie
+
         room.votes.push(votedId);
 
         if (room.votes.length >= room.players.length) {
@@ -125,6 +133,7 @@ io.on("connection", (socket) => {
                 room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
             } else if (pl && isKamikaze(pl)) {
                 msg = "💣 Kamikaze wykryty!";
+                room.scores[pl.id] = (room.scores[pl.id] || 0) + 1; // punkt dla kamikaze
             } else {
                 msg = "❌ Głosowanie nie trafiło w impostora.";
             }
@@ -181,9 +190,18 @@ io.on("connection", (socket) => {
     socket.on("leaveRoom", (code) => {
         const room = rooms[code];
         if (!room) return;
+
         room.players = room.players.filter(p => p.id !== socket.id);
         socket.leave(code);
-        io.to(code).emit("playerList", room.players);
+
+        if (room.ownerId === socket.id) {
+            // Właściciel wychodzi -> wywal wszystkich
+            delete rooms[code];
+            Object.keys(OWNER).forEach(id => { if (OWNER[id] === code) delete OWNER[id]; });
+            io.to(code).emit("forceLeave");
+        } else {
+            io.to(code).emit("playerList", room.players);
+        }
     });
 
     socket.on("nextRound", (code) => {
@@ -199,12 +217,19 @@ io.on("connection", (socket) => {
     });
 
     socket.on("disconnect", () => {
-        for (const code in rooms) {
-            const room = rooms[code];
-            room.players = room.players.filter(p => p.id !== socket.id);
-            io.to(code).emit("playerList", room.players);
+        const code = OWNER[socket.id];
+        if (code && rooms[code]) {
+            delete rooms[code];
+            io.to(code).emit("forceLeave");
+        } else {
+            for (const code in rooms) {
+                const room = rooms[code];
+                room.players = room.players.filter(p => p.id !== socket.id);
+                io.to(code).emit("playerList", room.players);
+            }
         }
+        delete OWNER[socket.id];
     });
 });
 
-server.listen(PORT, () => console.log(`✅ Serwer działa na porcie ${PORT}`));
+server.listen(PORT, () => console.log(`✅ Serwer na porcie ${PORT}`));
