@@ -19,10 +19,6 @@ let state = {
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
 
-function getRandomAvatar() {
-    return avatarList[Math.floor(Math.random() * avatarList.length)];
-}
-
 function renderLeaveButton() {
     return `<button id="leaveBtn" class="bg-red-500 mt-2">🚪 Opuść pokój</button>`;
 }
@@ -33,7 +29,6 @@ function handleLeave() {
 }
 
 function renderHome() {
-    state.avatar = getRandomAvatar();
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h1 class="text-3xl font-bold mb-4">🎭 Impostor Online</h1>
@@ -44,7 +39,13 @@ function renderHome() {
           <div class="w-8 h-8 rounded-full bg-${c}-500 cursor-pointer border-2" data-color="${c}"></div>
         `).join('')}
       </div>
-      <select id="modeSelect">
+      <div class="mb-2">Wybierz awatara:</div>
+      <div class="flex justify-center mb-2 flex-wrap gap-2" id="avatars">
+        ${avatarList.map(avatar => `
+          <img src="avatars/${avatar}" data-avatar="${avatar}" class="w-10 h-10 rounded-full border-4 cursor-pointer" />
+        `).join('')}
+      </div>
+      <select id="modeSelect" class="mb-2">
         <option value="random">🎲 Losowy</option>
         <option value="classic">🕵️ Klasyczny</option>
         <option value="double">🕵️🕵️ Podwójny</option>
@@ -56,6 +57,9 @@ function renderHome() {
       <button id="joinBtn">Dołącz</button>
     </div>
   `;
+
+    state.avatar = avatarList[0];
+
     document.querySelectorAll("[data-color]").forEach(el => {
         el.addEventListener("click", () => {
             state.color = el.dataset.color;
@@ -63,6 +67,15 @@ function renderHome() {
             el.classList.add("ring-4", "ring-white");
         });
     });
+
+    document.querySelectorAll("[data-avatar]").forEach(el => {
+        el.addEventListener("click", () => {
+            state.avatar = el.dataset.avatar;
+            document.querySelectorAll("[data-avatar]").forEach(e => e.classList.remove("ring-4", "ring-green-400"));
+            el.classList.add("ring-4", "ring-green-400");
+        });
+    });
+
     document.getElementById("createBtn").onclick = () => {
         const nickname = document.getElementById("nickname").value.trim();
         const selectedMode = document.getElementById("modeSelect").value;
@@ -71,10 +84,12 @@ function renderHome() {
         socket.emit("createRoom", nickname, state.color, selectedMode, (res) => {
             if (res.success) {
                 state.roomCode = res.roomCode;
+                socket.emit("updateAvatar", state.roomCode, state.avatar);
                 renderLobby();
             } else alert(res.error);
         });
     };
+
     document.getElementById("joinBtn").onclick = () => {
         const nickname = document.getElementById("nickname").value.trim();
         const code = document.getElementById("joinCode").value.trim().toUpperCase();
@@ -82,8 +97,10 @@ function renderHome() {
         state.nickname = nickname;
         state.roomCode = code;
         socket.emit("joinRoom", code, nickname, state.color, (res) => {
-            if (res.success) renderLobby();
-            else alert(res.error);
+            if (res.success) {
+                socket.emit("updateAvatar", state.roomCode, state.avatar);
+                renderLobby();
+            } else alert(res.error);
         });
     };
 }
@@ -139,7 +156,7 @@ function renderRole() {
       ${state.isKamikaze ? `<p class="text-yellow-400 font-bold mb-4">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
       <button class="bg-blue-500" id="continueBtn">Rozpocznij głosowanie</button>
       ${state.isImpostor && !state.guessUsed ? `
-        <input id="guessInput" placeholder="Zgadnij hasło" class="mt-4" />
+        <input id="guessInput" placeholder="Zgadnij hasło" class="mt-4 text-black" />
         <button id="guessBtn" class="bg-yellow-500">Zgłoś hasło</button>
       ` : ``}
       ${renderLeaveButton()}
@@ -147,6 +164,7 @@ function renderRole() {
   `;
     document.getElementById("continueBtn").onclick = renderVoting;
     document.getElementById("leaveBtn").onclick = handleLeave;
+
     if (state.isImpostor && !state.guessUsed) {
         document.getElementById("guessBtn").onclick = () => {
             const guess = document.getElementById("guessInput").value.trim();
@@ -183,6 +201,7 @@ function renderVoting() {
             app.innerHTML = `<p class="text-center text-lg">🕐 Czekamy na głosy pozostałych graczy...</p>`;
         };
     });
+
     document.getElementById("leaveBtn").onclick = handleLeave;
     if (state.isImpostor && !state.guessUsed) {
         document.getElementById("guessBtn").onclick = () => {
@@ -217,9 +236,12 @@ socket.on("roundEnd", ({ message, round, players }) => {
   `;
     document.getElementById("nextBtn").onclick = () => {
         socket.emit("nextRound", state.roomCode);
-        renderLobby();
     };
     document.getElementById("leaveBtn").onclick = handleLeave;
+});
+
+socket.on("startGameRequest", () => {
+    socket.emit("startGame", state.roomCode);
 });
 
 renderHome();
