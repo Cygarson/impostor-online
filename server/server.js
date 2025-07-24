@@ -50,7 +50,7 @@ io.on("connection", (socket) => {
             round: 0,
             scores: {},
             word: "",
-            votes: [],
+            votes: {},
             guessed: false,
             ownerId: socket.id,
             speakOrder: []
@@ -78,7 +78,7 @@ io.on("connection", (socket) => {
         if (!room || room.players.length < 2 || room.ownerId !== socket.id) return;
 
         room.gameStarted = true;
-        room.votes = [];
+        room.votes = {};
         room.guessed = false;
         room.word = wordList[Math.floor(Math.random() * wordList.length)];
         room.round++;
@@ -163,11 +163,11 @@ io.on("connection", (socket) => {
         if (!room) return;
         if (socket.id === votedId) return;
 
-        room.votes.push(votedId);
+        room.votes[socket.id] = votedId;
 
-        if (room.votes.length >= room.players.length) {
+        if (Object.keys(room.votes).length >= room.players.length) {
             const cnt = {};
-            room.votes.forEach(id => cnt[id] = (cnt[id] || 0) + 1);
+            Object.values(room.votes).forEach(id => cnt[id] = (cnt[id] || 0) + 1);
             const votedOut = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
 
             const pl = room.players.find(p => p.id === votedOut);
@@ -227,7 +227,7 @@ io.on("connection", (socket) => {
             });
 
             room.gameStarted = false;
-            room.votes = [];
+            room.votes = {};
         }
     });
 
@@ -282,7 +282,7 @@ io.on("connection", (socket) => {
         });
 
         room.gameStarted = false;
-        room.votes = [];
+        room.votes = {};
         room.guessed = true;
     });
 
@@ -299,11 +299,39 @@ io.on("connection", (socket) => {
         }
     });
 
+    socket.on("skipRound", (code) => {
+        const room = rooms[code];
+        if (!room || room.ownerId !== socket.id) return;
+
+        const summary = room.players.map(p => ({
+            nickname: p.nickname,
+            color: p.color,
+            isImpostor: !p.knowsWord && !p.isKamikaze,
+            isKamikaze: p.isKamikaze,
+            score: room.scores[p.id] || 0,
+            avatar: p.avatar || "alien.png"
+        }));
+
+        io.to(code).emit("roundEnd", {
+            message: "⏭️ Runda pominięta przez właściciela.",
+            round: room.round,
+            players: summary,
+            mode: room.forcedMode || "random"
+        });
+
+        room.gameStarted = false;
+        room.votes = {};
+        room.guessed = false;
+    });
+
     socket.on("leaveRoom", (code) => {
         const room = rooms[code];
         if (!room) return;
 
         room.players = room.players.filter(p => p.id !== socket.id);
+        if (room.votes && room.votes[socket.id]) {
+            delete room.votes[socket.id];
+        }
         socket.leave(code);
 
         if (room.ownerId === socket.id) {
@@ -325,8 +353,13 @@ io.on("connection", (socket) => {
         } else {
             for (const code in rooms) {
                 const room = rooms[code];
-                room.players = room.players.filter(p => p.id !== socket.id);
-                io.to(code).emit("playerList", room.players);
+                if (room.players.some(p => p.id === socket.id)) {
+                    room.players = room.players.filter(p => p.id !== socket.id);
+                    if (room.votes && room.votes[socket.id]) {
+                        delete room.votes[socket.id];
+                    }
+                    io.to(code).emit("playerList", room.players);
+                }
             }
         }
         delete OWNER[socket.id];

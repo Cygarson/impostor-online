@@ -205,6 +205,8 @@ function toggleRoleVisibility() {
 }
 
 function renderRole() {
+    const isOwner = socket.id === state.ownerId;
+
     app.innerHTML = `
     <div class="text-center max-w-lg mx-auto relative" id="roleScreen">
       <h2 class="text-2xl font-bold mb-4 text-amber-300">Twoja rola</h2>
@@ -235,24 +237,49 @@ function renderRole() {
           <p class="text-amber-200">👀 Rola ukryta</p>
         </div>
       `}
-      <button class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded w-full mb-2" id="continueBtn">
-        Rozpocznij głosowanie
-      </button>
+      ${isOwner ? `
+        <button class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded w-full mb-2" id="continueBtn">
+          Rozpocznij głosowanie
+        </button>
+        <button class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded w-full" id="skipBtn">
+          ⏭️ Pomijaj rundę
+        </button>
+      ` : `
+        <p class="text-amber-400 p-3 bg-amber-800 rounded-lg mb-4">Czekaj na rozpoczęcie głosowania...</p>
+        ${state.isImpostor && !state.guessUsed ? `
+          <div class="mt-4">
+            <input id="guessInput" placeholder="Zgadnij hasło" class="w-full p-2 rounded border border-amber-300 bg-amber-800 text-amber-100 mb-2" />
+            <button id="guessBtn" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded w-full">
+              Zgłoś hasło
+            </button>
+          </div>
+        ` : ``}
+      `}
       ${renderLeaveButton()}
     </div>
   `;
 
     document.getElementById("toggleVisibility").onclick = toggleRoleVisibility;
-    document.getElementById("continueBtn").onclick = renderVoting;
+
+    if (isOwner) {
+        document.getElementById("continueBtn").onclick = renderVoting;
+        document.getElementById("skipBtn").onclick = () => {
+            socket.emit("skipRound", state.roomCode);
+        };
+    }
+
     document.getElementById("leaveBtn").onclick = handleLeave;
 
     if (state.roleVisible && state.isImpostor && !state.guessUsed) {
-        document.getElementById("guessBtn").onclick = () => {
-            const guess = document.getElementById("guessInput").value.trim();
-            if (!guess) return;
-            socket.emit("guessWord", state.roomCode, guess);
-            state.guessUsed = true;
-        };
+        const guessBtn = document.getElementById("guessBtn");
+        if (guessBtn) {
+            guessBtn.onclick = () => {
+                const guess = document.getElementById("guessInput").value.trim();
+                if (!guess) return;
+                socket.emit("guessWord", state.roomCode, guess);
+                state.guessUsed = true;
+            };
+        }
     }
 }
 
@@ -269,6 +296,11 @@ function renderVoting() {
             Zgłoś hasło
           </button>
         </div>
+      ` : ``}
+      ${socket.id === state.ownerId ? `
+        <button id="skipBtn" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded w-full mb-2">
+          ⏭️ Pomijaj rundę
+        </button>
       ` : ``}
       ${renderLeaveButton()}
     </div>
@@ -303,6 +335,12 @@ function renderVoting() {
             if (!guess) return;
             socket.emit("guessWord", state.roomCode, guess);
             state.guessUsed = true;
+        };
+    }
+
+    if (socket.id === state.ownerId) {
+        document.getElementById("skipBtn").onclick = () => {
+            socket.emit("skipRound", state.roomCode);
         };
     }
 }
