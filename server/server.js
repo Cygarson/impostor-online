@@ -87,8 +87,8 @@ io.on("connection", (socket) => {
         const modeStr = room.forcedMode;
         const mode = modeStr === "classic" ? GameMode.CLASSIC :
             modeStr === "double" ? GameMode.DOUBLE :
-            modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
-                GameMode.CHAOS;
+                modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
+                    GameMode.CHAOS;
 
         const players = room.players.slice().sort(() => Math.random() - 0.5);
         const roles = {};
@@ -146,34 +146,34 @@ io.on("connection", (socket) => {
             const votedOut = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
 
             const pl = room.players.find(p => p.id === votedOut);
-            let msg = "";
             const impostors = room.players.filter(p => !p.knowsWord && !p.isKamikaze);
             const isImpostor = (p) => !p.knowsWord && !p.isKamikaze;
             const isKamikaze = (p) => p.isKamikaze;
 
+            let msg = "";
+
             if (pl && isImpostor(pl)) {
                 msg = "✅ Impostor wykryty!";
                 if (room.forcedMode === "double") {
-                    const other = impostors.find(p => p.id !== pl.id);
-                    if (other) {
-                        room.scores[other.id] = (room.scores[other.id] || 0) + 1;
-                    }
+                    impostors.forEach(p => {
+                        if (p.id !== pl.id) room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+                    });
+                    room.players.forEach(p => {
+                        if (!isImpostor(p)) room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+                    });
                 } else {
                     room.players.forEach(p => {
-                        if (!isImpostor(p) && !isKamikaze(p)) {
-                            room.scores[p.id] = (room.scores[p.id] || 0) + 1;
-                        }
+                        if (!isImpostor(p)) room.scores[p.id] = (room.scores[p.id] || 0) + 1;
                     });
                 }
             } else if (pl && isKamikaze(pl)) {
                 msg = "💣 Kamikaze wykryty!";
-                room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+                room.players.forEach(p => room.scores[p.id] = 0);
+                room.scores[pl.id] = 1;
             } else {
                 msg = "❌ Głosowanie nie trafiło w impostora.";
                 if (room.forcedMode === "double") {
-                    impostors.forEach(p => {
-                        room.scores[p.id] = (room.scores[p.id] || 0) + 1;
-                    });
+                    impostors.forEach(p => room.scores[p.id] = (room.scores[p.id] || 0) + 1);
                 } else {
                     const imp = room.players.find(p => isImpostor(p));
                     if (imp) room.scores[imp.id] = (room.scores[imp.id] || 0) + 1;
@@ -206,22 +206,43 @@ io.on("connection", (socket) => {
         const p = room.players.find(x => x.id === socket.id);
         if (!room || room.guessed || !p) return;
 
+        const impostors = room.players.filter(pl => !pl.knowsWord && !pl.isKamikaze);
+        const isImpostor = (pl) => !pl.knowsWord && !pl.isKamikaze;
+
         const correct = normalize(guess) === normalize(room.word);
+
+        let msg = "";
         if (correct) {
-            room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+            msg = `${p.nickname} odgadł hasło!`;
+            room.players.forEach(pl => room.scores[pl.id] = 0);
+            room.scores[p.id] = 1;
+        } else {
+            msg = `${p.nickname} pomylił się.`;
+            if (room.forcedMode === "double") {
+                impostors.forEach(pl => {
+                    if (pl.id !== p.id) room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+                });
+                room.players.forEach(pl => {
+                    if (!isImpostor(pl)) room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+                });
+            } else {
+                room.players.forEach(pl => {
+                    if (!isImpostor(pl)) room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+                });
+            }
         }
 
-        const summary = room.players.map(p => ({
-            nickname: p.nickname,
-            color: p.color,
-            isImpostor: !p.knowsWord && !p.isKamikaze,
-            isKamikaze: p.isKamikaze,
-            score: room.scores[p.id] || 0,
-            avatar: p.avatar || "alien.png"
+        const summary = room.players.map(pl => ({
+            nickname: pl.nickname,
+            color: pl.color,
+            isImpostor: !pl.knowsWord && !pl.isKamikaze,
+            isKamikaze: pl.isKamikaze,
+            score: room.scores[pl.id] || 0,
+            avatar: pl.avatar || "alien.png"
         }));
 
         io.to(code).emit("roundEnd", {
-            message: correct ? `${p.nickname} odgadł hasło!` : `${p.nickname} pomylił się.`,
+            message: msg,
             round: room.round,
             players: summary,
             mode: room.forcedMode || "random"
