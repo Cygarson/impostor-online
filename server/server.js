@@ -3,7 +3,6 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
-const fs = require("fs");
 
 const app = express();
 const server = http.createServer(app);
@@ -12,9 +11,9 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const wordList = fs.readFileSync(__dirname + "/words.txt", "utf-8").split("\n").map(w => w.trim()).filter(Boolean);
-const rooms = {}; // key: roomCode => value: room object
-const OWNER = {}; // key: socket.id => value: roomCode
+const wordList = ["pizza", "samochód", "komputer", "muzyka", "pies", "telefon", "chleb", "książka", "miasto", "pilot"];
+const rooms = {};
+const OWNER = {};
 const GameMode = { CLASSIC: 1, DOUBLE: 2, CHAOS: 3, CLASSIC_KAMIKAZE: 4 };
 
 function normalize(str) {
@@ -85,7 +84,7 @@ io.on("connection", (socket) => {
             });
         } else if (mode === GameMode.CLASSIC_KAMIKAZE) {
             impostors = [players[0].id];
-            if (players.length > 2 && Math.random() < 0.4) { // zwiększone z 25% do 40%
+            if (players.length > 2 && Math.random() < 0.4) {
                 const rest = players.filter(p => !impostors.includes(p.id));
                 kamikazeId = rest[Math.floor(Math.random() * rest.length)].id;
             }
@@ -115,7 +114,6 @@ io.on("connection", (socket) => {
     socket.on("submitVote", (code, votedId) => {
         const room = rooms[code];
         if (!room) return;
-
         if (socket.id === votedId) return;
 
         room.votes.push(votedId);
@@ -139,9 +137,6 @@ io.on("connection", (socket) => {
                 room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
             } else {
                 msg = "❌ Głosowanie nie trafiło w impostora.";
-                // punkt dla prawdziwego impostora, który nie został wykryty
-                const imp = room.players.find(p => !p.knowsWord && !p.isKamikaze);
-                if (imp) room.scores[imp.id] = (room.scores[imp.id] || 0) + 1;
             }
 
             const summary = room.players.map(p => ({
@@ -157,7 +152,7 @@ io.on("connection", (socket) => {
                 message: msg,
                 round: room.round,
                 players: summary,
-                mode: room.forcedMode
+                mode: room.forcedMode || "random"
             });
 
             room.gameStarted = false;
@@ -187,7 +182,7 @@ io.on("connection", (socket) => {
             message: correct ? `${p.nickname} odgadł hasło!` : `${p.nickname} pomylił się.`,
             round: room.round,
             players: summary,
-            mode: room.forcedMode
+            mode: room.forcedMode || "random"
         });
 
         room.gameStarted = false;
@@ -198,9 +193,9 @@ io.on("connection", (socket) => {
     socket.on("nextRound", (code, selectedMode) => {
         const room = rooms[code];
         if (room) {
+            room.forcedMode = selectedMode;
             room.gameStarted = false;
             room.guessed = false;
-            if (selectedMode) room.forcedMode = selectedMode;
             io.to(code).emit("playerList", room.players);
             setTimeout(() => {
                 io.to(code).emit("startGameRequest");
@@ -240,4 +235,4 @@ io.on("connection", (socket) => {
     });
 });
 
-server.listen(PORT, () => console.log(`✅ Serwer działa na porcie ${PORT}`));
+server.listen(PORT, () => console.log(`✅ Serwer nasłuchuje na porcie ${PORT}`));
