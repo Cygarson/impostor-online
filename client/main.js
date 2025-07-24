@@ -42,7 +42,7 @@ function renderHome() {
       <div class="mb-2">Wybierz awatara:</div>
       <div class="flex justify-center mb-2 flex-wrap gap-2" id="avatars">
         ${avatarList.map(avatar => `
-          <img src="avatars/${avatar}" data-avatar="${avatar}" class="w-10 h-10 rounded-full border-4 cursor-pointer" />
+          <img src="avatars/${avatar}" data-avatar="${avatar}" class="w-10 h-10 rounded-full border-2 cursor-pointer" />
         `).join('')}
       </div>
       <select id="modeSelect" class="mb-2">
@@ -81,10 +81,9 @@ function renderHome() {
         const selectedMode = document.getElementById("modeSelect").value;
         if (!nickname || !state.color) return alert("Wpisz imię i wybierz kolor!");
         state.nickname = nickname;
-        socket.emit("createRoom", nickname, state.color, selectedMode, (res) => {
+        socket.emit("createRoom", nickname, state.color, selectedMode, state.avatar, (res) => {
             if (res.success) {
                 state.roomCode = res.roomCode;
-                socket.emit("updateAvatar", state.roomCode, state.avatar);
                 renderLobby();
             } else alert(res.error);
         });
@@ -96,11 +95,9 @@ function renderHome() {
         if (!nickname || !state.color || !code) return alert("Uzupełnij wszystkie dane!");
         state.nickname = nickname;
         state.roomCode = code;
-        socket.emit("joinRoom", code, nickname, state.color, (res) => {
-            if (res.success) {
-                socket.emit("updateAvatar", state.roomCode, state.avatar);
-                renderLobby();
-            } else alert(res.error);
+        socket.emit("joinRoom", code, nickname, state.color, state.avatar, (res) => {
+            if (res.success) renderLobby();
+            else alert(res.error);
         });
     };
 }

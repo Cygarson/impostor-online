@@ -1,5 +1,3 @@
-// PEŁNA ZAWARTOŚĆ — WERSJA Z OBSŁUGĄ AVATARÓW
-
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -23,7 +21,7 @@ function normalize(str) {
 io.on("connection", (socket) => {
     console.log("🔌 Połączono:", socket.id);
 
-    socket.on("createRoom", (nickname, color, mode, callback) => {
+    socket.on("createRoom", (nickname, color, mode, avatar, callback) => {
         const code = Math.random().toString(36).slice(2, 6).toUpperCase();
         rooms[code] = {
             players: [],
@@ -35,27 +33,19 @@ io.on("connection", (socket) => {
             votes: [],
             guessed: false
         };
-        rooms[code].players.push({ id: socket.id, nickname, color, avatar: "alien.png" });
+        rooms[code].players.push({ id: socket.id, nickname, color, avatar });
         socket.join(code);
         callback({ success: true, roomCode: code });
         io.to(code).emit("playerList", rooms[code].players);
     });
 
-    socket.on("joinRoom", (code, nickname, color, callback) => {
+    socket.on("joinRoom", (code, nickname, color, avatar, callback) => {
         const room = rooms[code];
         if (!room) return callback({ success: false, error: "Nie ma pokoju." });
         if (room.gameStarted) return callback({ success: false, error: "Gra już trwa." });
-        room.players.push({ id: socket.id, nickname, color, avatar: "alien.png" });
+        room.players.push({ id: socket.id, nickname, color, avatar });
         socket.join(code);
         callback({ success: true });
-        io.to(code).emit("playerList", room.players);
-    });
-
-    socket.on("updateAvatar", (code, avatar) => {
-        const room = rooms[code];
-        if (!room) return;
-        const p = room.players.find(p => p.id === socket.id);
-        if (p) p.avatar = avatar;
         io.to(code).emit("playerList", room.players);
     });
 
