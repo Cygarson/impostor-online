@@ -21,15 +21,6 @@ let state = {
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
 
-function modeLabel(mode) {
-    return {
-        classic: "Klasyczny",
-        double: "Podwójny",
-        chaos: "Chaos",
-        kamikaze: "Kamikaze"
-    }[mode] || "Losowy";
-}
-
 function renderLeaveButton() {
     return `<button id="leaveBtn" class="bg-red-500 mt-2">🚪 Opuść pokój</button>`;
 }
@@ -111,9 +102,9 @@ function renderLobby() {
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-2xl font-bold mb-4">Pokój: ${state.roomCode}</h2>
       <div class="flex justify-between items-center mb-4">
-        <span class="text-lg">👥 Graczy: ${state.players.length}</span>
+        <span id="playerCounter">👥 Graczy: ${state.players.length}</span>
         ${socket.id === state.ownerId ? `
-          <select id="modeSelect" class="text-black text-base font-semibold bg-white px-3 py-2 rounded w-full max-w-xs">
+          <select id="modeSelect">
             <option value="random">🎲 Losowy</option>
             <option value="classic">🕵️ Klasyczny</option>
             <option value="double">🕵️🕵️ Podwójny</option>
@@ -153,17 +144,17 @@ function renderPlayerList(players) {
       <span class="text-${p.color}-400 font-semibold">${p.nickname}</span>
     </div>
   `).join('');
-    const owner = players[0];
-    state.ownerId = owner?.id;
 }
 
 socket.on("playerList", players => {
     state.players = players;
-    renderPlayerList(players);
     if (document.getElementById("playerList")) {
-        renderLobby(); // odśwież lobby, jeśli aktywne
+        renderPlayerList(players);
+        const counter = document.querySelector("#playerCounter");
+        if (counter) counter.textContent = `👥 Graczy: ${players.length}`;
     }
 });
+
 
 socket.on("forceLeave", () => {
     alert("👑 Właściciel pokoju opuścił grę. Zostajesz przeniesiony na stronę główną.");
