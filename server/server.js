@@ -2,6 +2,8 @@ const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
 const cors = require("cors");
+const fs = require("fs");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
@@ -10,10 +12,28 @@ const io = new Server(server, {
 });
 
 const PORT = process.env.PORT || 3000;
-const wordList = ["pizza", "samochód", "komputer", "muzyka", "pies", "telefon", "chleb", "książka", "miasto", "pilot"];
+
+// 📄 Wczytanie słów z pliku words.txt
+let wordList = [];
+const wordPath = path.join(__dirname, "words.txt");
+try {
+    const raw = fs.readFileSync(wordPath, "utf-8");
+    wordList = raw.split(/\r?\n/).map(w => w.trim()).filter(w => w.length > 0);
+    console.log(`📚 Wczytano ${wordList.length} słów z words.txt`);
+} catch (err) {
+    console.error("❌ Błąd przy wczytywaniu pliku words.txt:", err.message);
+    wordList = ["awaria", "serwer", "słowo", "domyślne"];
+}
+
 const rooms = {};
 const OWNER = {};
-const GameMode = { CLASSIC: 1, DOUBLE: 2, CHAOS: 3, CLASSIC_KAMIKAZE: 4 };
+
+const GameMode = {
+    CLASSIC: 1,
+    DOUBLE: 2,
+    CHAOS: 3,
+    CLASSIC_KAMIKAZE: 4
+};
 
 function normalize(str) {
     return str.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -46,6 +66,7 @@ io.on("connection", (socket) => {
         const room = rooms[code];
         if (!room) return callback({ success: false, error: "Nie ma pokoju." });
         if (room.gameStarted) return callback({ success: false, error: "Gra już trwa." });
+
         room.players.push({ id: socket.id, nickname, color, avatar });
         socket.join(code);
         callback({ success: true });
@@ -55,6 +76,7 @@ io.on("connection", (socket) => {
     socket.on("startGame", (code, selectedMode) => {
         const room = rooms[code];
         if (!room || room.players.length < 2 || room.ownerId !== socket.id) return;
+
         room.gameStarted = true;
         room.votes = [];
         room.guessed = false;
@@ -131,7 +153,6 @@ io.on("connection", (socket) => {
 
             if (pl && isImpostor(pl)) {
                 msg = "✅ Impostor wykryty!";
-
                 if (room.forcedMode === "double") {
                     const other = impostors.find(p => p.id !== pl.id);
                     if (other) {
@@ -233,7 +254,9 @@ io.on("connection", (socket) => {
 
         if (room.ownerId === socket.id) {
             delete rooms[code];
-            Object.keys(OWNER).forEach(id => { if (OWNER[id] === code) delete OWNER[id]; });
+            Object.keys(OWNER).forEach(id => {
+                if (OWNER[id] === code) delete OWNER[id];
+            });
             io.to(code).emit("forceLeave");
         } else {
             io.to(code).emit("playerList", room.players);

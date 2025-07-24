@@ -72,4 +72,12 @@ img {
     h3 {
         font-size: 1.25rem;
     }
+
+    select {
+        background-color: #f9fafb;
+        color: #1f2937;
+        font-weight: bold;
+        font-size: 1rem;
+    }
+
 }

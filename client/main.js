@@ -1,4 +1,3 @@
-// main.js
 const socket = io("https://impostor-server-wmgt.onrender.com");
 const app = document.getElementById("app");
 
@@ -110,11 +109,11 @@ function renderHome() {
 function renderLobby() {
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
-      <h2 class="text-xl font-semibold mb-2">Pokój: ${state.roomCode}</h2>
-      <div class="flex justify-between items-center mb-2">
-        <span>👥 Graczy: ${state.players.length}</span>
+      <h2 class="text-2xl font-bold mb-4">Pokój: ${state.roomCode}</h2>
+      <div class="flex justify-between items-center mb-4">
+        <span class="text-lg">👥 Graczy: ${state.players.length}</span>
         ${socket.id === state.ownerId ? `
-          <select id="modeSelect" class="text-black text-sm">
+          <select id="modeSelect" class="text-black text-base font-semibold bg-white px-3 py-2 rounded w-full max-w-xs">
             <option value="random">🎲 Losowy</option>
             <option value="classic">🕵️ Klasyczny</option>
             <option value="double">🕵️🕵️ Podwójny</option>
@@ -122,8 +121,8 @@ function renderLobby() {
             <option value="kamikaze">💣 Kamikaze</option>
           </select>` : ""}
       </div>
-      <div id="playerList" class="grid grid-cols-2 gap-4 mb-4"></div>
-      ${socket.id === state.ownerId ? '<button id="startBtn">Rozpocznij grę</button>' : '<p class="text-gray-500">Czekaj na rozpoczęcie gry...</p>'}
+      <div id="playerList" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 text-left px-2"></div>
+      ${socket.id === state.ownerId ? '<button id="startBtn">Rozpocznij grę</button>' : '<p class="text-gray-400">Czekaj na rozpoczęcie gry...</p>'}
       ${renderLeaveButton()}
     </div>
   `;
@@ -159,7 +158,11 @@ function renderPlayerList(players) {
 }
 
 socket.on("playerList", players => {
+    state.players = players;
     renderPlayerList(players);
+    if (document.getElementById("playerList")) {
+        renderLobby(); // odśwież lobby, jeśli aktywne
+    }
 });
 
 socket.on("forceLeave", () => {
@@ -269,7 +272,7 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
       </ul>
       ${socket.id === state.ownerId ? `
         <label for="modeSelect" class="block mb-2 font-medium">Zmień tryb gry:</label>
-        <select id="modeSelect" class="mb-4">
+        <select id="modeSelect" class="mb-4 bg-white text-black font-semibold px-3 py-2 rounded">
           <option value="classic">🕵️ Klasyczny</option>
           <option value="double">🕵️🕵️ Podwójny</option>
           <option value="chaos">🤯 Chaos</option>
