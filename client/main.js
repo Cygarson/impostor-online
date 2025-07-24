@@ -112,6 +112,10 @@ function renderLobby() {
     </div>
   `;
     document.getElementById("startBtn").onclick = () => {
+        if (state.players.length < 2) {
+            alert("❗ Musisz mieć co najmniej 2 graczy, aby rozpocząć grę.");
+            return;
+        }
         socket.emit("startGame", state.roomCode);
     };
     document.getElementById("leaveBtn").onclick = handleLeave;

@@ -51,7 +51,7 @@ io.on("connection", (socket) => {
 
     socket.on("startGame", (code) => {
         const room = rooms[code];
-        if (!room || room.players.length < 3) return;
+        if (!room || room.players.length < 2) return; // 👈 Umożliwia start od 2 graczy
         room.gameStarted = true;
         room.votes = [];
         room.guessed = false;
