@@ -1,4 +1,3 @@
-// main.js
 const socket = io("https://impostor-server-wmgt.onrender.com");
 const app = document.getElementById("app");
 
@@ -119,19 +118,37 @@ function renderLobby() {
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-semibold mb-2">Pokój: ${state.roomCode}</h2>
+      <div class="flex justify-between items-center mb-2">
+        <span>👥 Graczy: ${state.players.length}</span>
+        ${socket.id === state.ownerId ? `
+          <select id="modeSelect" class="text-black text-sm">
+            <option value="random">🎲 Losowy</option>
+            <option value="classic">🕵️ Klasyczny</option>
+            <option value="double">🕵️🕵️ Podwójny</option>
+            <option value="chaos">🤯 Chaos</option>
+            <option value="kamikaze">💣 Kamikaze</option>
+          </select>` : ""
+        }
+      </div>
       <div id="playerList" class="grid grid-cols-2 gap-4 mb-4"></div>
       ${socket.id === state.ownerId ? '<button id="startBtn">Rozpocznij grę</button>' : '<p class="text-gray-500">Czekaj na rozpoczęcie gry...</p>'}
       ${renderLeaveButton()}
     </div>
   `;
+
     const btn = document.getElementById("startBtn");
     if (btn) btn.onclick = () => {
         if (state.players.length < 2) {
             alert("❗ Musisz mieć co najmniej 2 graczy, aby rozpocząć grę.");
             return;
         }
-        socket.emit("startGame", state.roomCode);
+
+        const modeSelect = document.getElementById("modeSelect");
+        const selectedMode = modeSelect ? modeSelect.value : "random";
+        state.currentMode = selectedMode;
+        socket.emit("startGame", state.roomCode, selectedMode);
     };
+
     document.getElementById("leaveBtn").onclick = handleLeave;
     renderPlayerList(state.players);
 }
@@ -266,8 +283,8 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
           <option value="chaos">🤯 Chaos</option>
           <option value="kamikaze">💣 Kamikaze</option>
         </select>
-        <button id="nextBtn" class="bg-green-600">Graj dalej</button>`
-            : '<p class="text-gray-500">Czekaj na decyzję właściciela pokoju...</p>'}
+        <button id="nextBtn" class="bg-green-600">Graj dalej</button>` :
+            '<p class="text-gray-500">Czekaj na decyzję właściciela pokoju...</p>'}
       ${renderLeaveButton()}
     </div>
   `;

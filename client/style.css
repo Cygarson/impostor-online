@@ -4,8 +4,10 @@ body {
     font-family: 'Segoe UI', sans-serif;
     display: flex;
     justify-content: center;
+    align-items: center;
     padding: 2rem;
     min-height: 100vh;
+    text-align: center;
 }
 
 input, select, button {
