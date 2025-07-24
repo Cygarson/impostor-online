@@ -1,7 +1,4 @@
-// 📌 Główna logika klienta Impostor Online
-// UWAGA: upewnij się, że w <script> masz <script src="/socket.io/socket.io.js"></script>
-
-const socket = io("https://impostor-server-wmgt.onrender.com"); // 🔁 Zmień jeśli Twój serwer ma inny adres
+const socket = io("https://impostor-server-wmgt.onrender.com");
 const app = document.getElementById("app");
 
 let state = {
@@ -17,9 +14,26 @@ let state = {
     round: 0,
     scores: {},
     guessUsed: false,
+    avatar: "",
 };
 
+const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
+
+function getRandomAvatar() {
+    return avatarList[Math.floor(Math.random() * avatarList.length)];
+}
+
+function renderLeaveButton() {
+    return `<button id="leaveBtn" class="bg-red-500 mt-2">🚪 Opuść pokój</button>`;
+}
+
+function handleLeave() {
+    socket.emit("leaveRoom", state.roomCode);
+    location.reload();
+}
+
 function renderHome() {
+    state.avatar = getRandomAvatar();
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h1 class="text-3xl font-bold mb-4">🎭 Impostor Online</h1>
@@ -32,8 +46,8 @@ function renderHome() {
       </div>
       <select id="modeSelect">
         <option value="random">🎲 Losowy</option>
-        <option value="classic">🕵️ Klasyczny (1 impostor)</option>
-        <option value="double">🕵️🕵️ Podwójny impostor</option>
+        <option value="classic">🕵️ Klasyczny</option>
+        <option value="double">🕵️🕵️ Podwójny</option>
         <option value="chaos">🤯 Chaos</option>
         <option value="kamikaze">💣 Kamikaze</option>
       </select>
@@ -42,7 +56,6 @@ function renderHome() {
       <button id="joinBtn">Dołącz</button>
     </div>
   `;
-
     document.querySelectorAll("[data-color]").forEach(el => {
         el.addEventListener("click", () => {
             state.color = el.dataset.color;
@@ -50,7 +63,6 @@ function renderHome() {
             el.classList.add("ring-4", "ring-white");
         });
     });
-
     document.getElementById("createBtn").onclick = () => {
         const nickname = document.getElementById("nickname").value.trim();
         const selectedMode = document.getElementById("modeSelect").value;
@@ -63,7 +75,6 @@ function renderHome() {
             } else alert(res.error);
         });
     };
-
     document.getElementById("joinBtn").onclick = () => {
         const nickname = document.getElementById("nickname").value.trim();
         const code = document.getElementById("joinCode").value.trim().toUpperCase();
@@ -81,13 +92,15 @@ function renderLobby() {
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-semibold mb-2">Pokój: ${state.roomCode}</h2>
-      <div id="playerList" class="grid grid-cols-2 gap-2 mb-4"></div>
+      <div id="playerList" class="grid grid-cols-2 gap-4 mb-4"></div>
       <button id="startBtn">Rozpocznij grę</button>
+      ${renderLeaveButton()}
     </div>
   `;
     document.getElementById("startBtn").onclick = () => {
         socket.emit("startGame", state.roomCode);
     };
+    document.getElementById("leaveBtn").onclick = handleLeave;
     renderPlayerList(state.players);
 }
 
@@ -95,9 +108,9 @@ function renderPlayerList(players) {
     const list = document.getElementById("playerList");
     if (!list) return;
     list.innerHTML = players.map(p => `
-    <div class="flex items-center space-x-2">
-      <div class="w-4 h-4 rounded-full bg-${p.color}-500"></div>
-      <span>${p.nickname}</span>
+    <div class="flex items-center gap-2">
+      <img src="avatars/${p.avatar || 'alien.png'}" alt="avatar" class="w-8 h-8 rounded-full border" />
+      <span class="text-${p.color}-400 font-semibold">${p.nickname}</span>
     </div>
   `).join('');
 }
@@ -123,11 +136,25 @@ function renderRole() {
       <h2 class="text-2xl font-bold mb-4">Twoja rola</h2>
       ${state.knowsWord ? `<p class="mb-2">✅ Znasz hasło:</p><p class="text-xl font-mono mb-4">"${state.word}"</p>` : ``}
       ${state.isImpostor ? `<p class="text-red-500 font-bold mb-4">🚨 Jesteś impostorem!</p>` : ``}
-      ${state.isKamikaze ? `<p class="text-yellow-400 font-bold mb-4">💣 Jesteś Kamikaze! Blefuj jak impostor.</p>` : ``}
+      ${state.isKamikaze ? `<p class="text-yellow-400 font-bold mb-4">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
       <button class="bg-blue-500" id="continueBtn">Rozpocznij głosowanie</button>
+      ${state.isImpostor && !state.guessUsed ? `
+        <input id="guessInput" placeholder="Zgadnij hasło" class="mt-4" />
+        <button id="guessBtn" class="bg-yellow-500">Zgłoś hasło</button>
+      ` : ``}
+      ${renderLeaveButton()}
     </div>
   `;
     document.getElementById("continueBtn").onclick = renderVoting;
+    document.getElementById("leaveBtn").onclick = handleLeave;
+    if (state.isImpostor && !state.guessUsed) {
+        document.getElementById("guessBtn").onclick = () => {
+            const guess = document.getElementById("guessInput").value.trim();
+            if (!guess) return;
+            socket.emit("guessWord", state.roomCode, guess);
+            state.guessUsed = true;
+        };
+    }
 }
 
 function renderVoting() {
@@ -139,14 +166,15 @@ function renderVoting() {
         <input id="guessInput" placeholder="Zgadnij hasło" class="mb-2 text-black" />
         <button id="guessBtn" class="bg-yellow-500">Zgłoś hasło</button>
       ` : ``}
+      ${renderLeaveButton()}
     </div>
   `;
-
     const list = document.getElementById("voteList");
     list.innerHTML = state.players.map(p => `
-    <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">${p.nickname}</button>
+    <button class="bg-${p.color}-500 rounded px-4 py-2 text-white" data-id="${p.id}">
+      <img src="avatars/${p.avatar || 'alien.png'}" class="w-5 h-5 inline mr-2" /> ${p.nickname}
+    </button>
   `).join('');
-
     document.querySelectorAll("[data-id]").forEach(btn => {
         btn.onclick = () => {
             if (state.voted) return;
@@ -155,7 +183,7 @@ function renderVoting() {
             app.innerHTML = `<p class="text-center text-lg">🕐 Czekamy na głosy pozostałych graczy...</p>`;
         };
     });
-
+    document.getElementById("leaveBtn").onclick = handleLeave;
     if (state.isImpostor && !state.guessUsed) {
         document.getElementById("guessBtn").onclick = () => {
             const guess = document.getElementById("guessInput").value.trim();
@@ -170,7 +198,6 @@ socket.on("roundEnd", ({ message, round, players }) => {
     state.round = round;
     state.scores = {};
     players.forEach(p => state.scores[p.nickname] = p.score);
-
     app.innerHTML = `
     <div class="text-center max-w-md mx-auto">
       <h2 class="text-xl font-bold mb-2">🏁 Runda ${round} zakończona</h2>
@@ -178,16 +205,21 @@ socket.on("roundEnd", ({ message, round, players }) => {
       <h3 class="text-lg font-semibold">🎯 Punktacja:</h3>
       <ul class="mb-4">
         ${players.map(p => `
-          <li class="text-${p.color}-400">${p.nickname}: ${p.score} pkt – ${p.isImpostor ? "Impostor" : p.isKamikaze ? "Kamikaze" : "Niewinny"}</li>
+          <li class="text-${p.color}-400 text-lg font-bold">
+            <img src="avatars/${p.avatar || 'alien.png'}" class="inline w-6 h-6 mr-2" />
+            ${p.nickname}: ${p.score} pkt – ${p.isImpostor ? "Impostor" : p.isKamikaze ? "Kamikaze" : "Niewinny"}
+          </li>
         `).join('')}
       </ul>
       <button id="nextBtn" class="bg-green-600">Graj dalej</button>
+      ${renderLeaveButton()}
     </div>
   `;
     document.getElementById("nextBtn").onclick = () => {
         socket.emit("nextRound", state.roomCode);
         renderLobby();
     };
+    document.getElementById("leaveBtn").onclick = handleLeave;
 });
 
 renderHome();
