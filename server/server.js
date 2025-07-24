@@ -1,3 +1,5 @@
+// PEŁNA ZAWARTOŚĆ — WERSJA Z OBSŁUGĄ AVATARÓW
+
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -49,6 +51,14 @@ io.on("connection", (socket) => {
         io.to(code).emit("playerList", room.players);
     });
 
+    socket.on("updateAvatar", (code, avatar) => {
+        const room = rooms[code];
+        if (!room) return;
+        const p = room.players.find(p => p.id === socket.id);
+        if (p) p.avatar = avatar;
+        io.to(code).emit("playerList", room.players);
+    });
+
     socket.on("startGame", (code) => {
         const room = rooms[code];
         if (!room || room.players.length < 3) return;
@@ -60,9 +70,9 @@ io.on("connection", (socket) => {
 
         const modeStr = room.forcedMode;
         const mode = modeStr === "classic" ? GameMode.CLASSIC :
-                     modeStr === "double" ? GameMode.DOUBLE :
-                     modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
-                     GameMode.CHAOS;
+            modeStr === "double" ? GameMode.DOUBLE :
+                modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
+                    GameMode.CHAOS;
 
         const players = room.players.slice().sort(() => Math.random() - 0.5);
         const roles = {};
@@ -192,7 +202,6 @@ io.on("connection", (socket) => {
             room.gameStarted = false;
             room.guessed = false;
             io.to(code).emit("playerList", room.players);
-            // Automatyczne uruchomienie kolejnej rundy
             setTimeout(() => {
                 io.to(code).emit("startGameRequest");
             }, 1000);
