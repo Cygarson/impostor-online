@@ -1,6 +1,6 @@
-﻿body {
-    background-color: #111827;
-    color: white;
+﻿\body {
+    background-color: #1a120b;
+    color: #e5e5cb;
     font-family: 'Segoe UI', sans-serif;
     display: flex;
     justify-content: center;
@@ -17,13 +17,13 @@ input, select, button {
     border: none;
     margin: 0.25rem 0;
     outline: none;
+    transition: all 0.2s ease;
 }
 
 input, select {
-    background-color: #1f2937;
-    color: white;
-    border: 1px solid #374151;
-    width: 100%;
+    background-color: #3c2a21;
+    color: #e5e5cb;
+    border: 1px solid #d5cea3;
 }
 
     input::placeholder {
@@ -31,15 +31,14 @@ input, select {
     }
 
 button {
-    background-color: #3b82f6;
-    color: white;
+    background-color: #d5cea3;
+    color: #1a120b;
     cursor: pointer;
-    transition: all 0.2s ease;
-    margin: 0.25rem;
+    font-weight: bold;
 }
 
     button:hover {
-        opacity: 0.9;
+        background-color: #e5e5cb;
     }
 
 h1, h2, h3 {
@@ -74,10 +73,9 @@ img {
     }
 }
 
-/* 🔧 Stylizacja SELECTA */
 select {
-    background-color: #ffffff;
-    color: #1f2937;
+    background-color: #3c2a21;
+    color: #e5e5cb;
     font-weight: 600;
     font-size: 1rem;
     padding: 0.5rem 1rem;
@@ -85,4 +83,93 @@ select {
     width: 100%;
     max-width: 200px;
     margin: 0.25rem;
+    border: 1px solid #d5cea3;
+}
+
+.bg-rose-500 {
+    background-color: #e11d48;
+}
+
+.bg-rose-600 {
+    background-color: #db2777;
+}
+
+.bg-amber-300 {
+    background-color: #fbbf24;
+}
+
+.bg-amber-400 {
+    background-color: #f59e0b;
+}
+
+.bg-amber-500 {
+    background-color: #f59e0b;
+}
+
+.bg-amber-600 {
+    background-color: #d97706;
+}
+
+.bg-amber-700 {
+    background-color: #b45309;
+}
+
+.bg-amber-800 {
+    background-color: #92400e;
+}
+
+.bg-amber-900 {
+    background-color: #78350f;
+}
+
+.text-amber-100 {
+    color: #fef3c7;
+}
+
+.text-amber-200 {
+    color: #fde68a;
+}
+
+.text-amber-300 {
+    color: #fcd34d;
+}
+
+.text-amber-400 {
+    color: #fbbf24;
+}
+
+.text-rose-300 {
+    color: #fda4af;
+}
+
+.text-rose-400 {
+    color: #fb7185;
+}
+
+.border-amber-300 {
+    border-color: #fcd34d;
+}
+
+.border-amber-400 {
+    border-color: #fbbf24;
+}
+
+.border-amber-500 {
+    border-color: #f59e0b;
+}
+
+.border-amber-600 {
+    border-color: #d97706;
+}
+
+.hover\:bg-rose-600:hover {
+    background-color: #db2777;
+}
+
+.hover\:bg-amber-600:hover {
+    background-color: #d97706;
+}
+
+.hover\:bg-amber-700:hover {
+    background-color: #b45309;
 }

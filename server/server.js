@@ -85,7 +85,7 @@ io.on("connection", (socket) => {
 
         // Zachowaj istniejące wyniki
         room.players.forEach(player => {
-            if (!room.scores[player.id]) {
+            if (room.scores[player.id] === undefined) {
                 room.scores[player.id] = 0;
             }
         });
