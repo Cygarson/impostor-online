@@ -55,7 +55,7 @@ io.on("connection", (socket) => {
             ownerId: socket.id,
             speakOrder: []
         };
-        rooms[code].players.push({ id: socket.id, nickname, color, avatar });
+        rooms[code].players.push({ id: socket.id, nickname, color, avatar, score: 0 });
         OWNER[socket.id] = code;
         socket.join(code);
         callback({ success: true, roomCode: code });
@@ -67,7 +67,7 @@ io.on("connection", (socket) => {
         if (!room) return callback({ success: false, error: "Nie ma pokoju." });
         if (room.gameStarted) return callback({ success: false, error: "Gra już trwa." });
 
-        room.players.push({ id: socket.id, nickname, color, avatar });
+        room.players.push({ id: socket.id, nickname, color, avatar, score: 0 });
         socket.join(code);
         callback({ success: true });
         io.to(code).emit("playerList", room.players);
@@ -82,6 +82,14 @@ io.on("connection", (socket) => {
         room.guessed = false;
         room.word = wordList[Math.floor(Math.random() * wordList.length)];
         room.round++;
+
+        // Zachowaj istniejące wyniki
+        room.players.forEach(player => {
+            if (!room.scores[player.id]) {
+                room.scores[player.id] = 0;
+            }
+        });
+
         room.forcedMode = selectedMode;
 
         const modeStr = room.forcedMode;
@@ -150,37 +158,46 @@ io.on("connection", (socket) => {
             const votedOut = Object.entries(cnt).sort((a, b) => b[1] - a[1])[0][0];
 
             const pl = room.players.find(p => p.id === votedOut);
-            const impostors = room.players.filter(p => !p.knowsWord && !p.isKamikaze);
             const isImpostor = (p) => !p.knowsWord && !p.isKamikaze;
             const isKamikaze = (p) => p.isKamikaze;
+            const isInnocent = (p) => p.knowsWord && !p.isKamikaze;
 
             let msg = "";
 
             if (pl && isImpostor(pl)) {
                 msg = "✅ Impostor wykryty!";
-                if (room.forcedMode === "double") {
-                    impostors.forEach(p => {
-                        if (p.id !== pl.id) room.scores[p.id] = (room.scores[p.id] || 0) + 1;
-                    });
-                    room.players.forEach(p => {
-                        if (!isImpostor(p)) room.scores[p.id] = (room.scores[p.id] || 0) + 1;
-                    });
-                } else {
-                    room.players.forEach(p => {
-                        if (!isImpostor(p)) room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+
+                // Klasyczny: niewinni dostają punkt
+                if (room.forcedMode === "classic" || room.forcedMode === "kamikaze") {
+                    room.players.filter(p => !isImpostor(p)).forEach(p => {
+                        room.scores[p.id] = (room.scores[p.id] || 0) + 1;
                     });
                 }
-            } else if (pl && isKamikaze(pl)) {
+                // Podwójny: wszyscy oprócz głosowanego impostora
+                else if (room.forcedMode === "double") {
+                    room.players.filter(p => p.id !== pl.id).forEach(p => {
+                        room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+                    });
+                }
+            }
+            else if (pl && isKamikaze(pl)) {
                 msg = "💣 Kamikaze wykryty!";
-                room.players.forEach(p => room.scores[p.id] = 0);
-                room.scores[pl.id] = 1;
-            } else {
+                room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+            }
+            else {
                 msg = "❌ Głosowanie nie trafiło w impostora.";
-                if (room.forcedMode === "double") {
-                    impostors.forEach(p => room.scores[p.id] = (room.scores[p.id] || 0) + 1);
-                } else {
-                    const imp = room.players.find(p => isImpostor(p));
-                    if (imp) room.scores[imp.id] = (room.scores[imp.id] || 0) + 1;
+
+                // Klasyczny: impostor dostaje punkt
+                if (room.forcedMode === "classic" || room.forcedMode === "kamikaze") {
+                    room.players.filter(p => isImpostor(p)).forEach(p => {
+                        room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+                    });
+                }
+                // Podwójny: wszyscy impostorzy dostają punkt
+                else if (room.forcedMode === "double") {
+                    room.players.filter(p => isImpostor(p)).forEach(p => {
+                        room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+                    });
                 }
             }
 
@@ -210,28 +227,31 @@ io.on("connection", (socket) => {
         const p = room.players.find(x => x.id === socket.id);
         if (!room || room.guessed || !p) return;
 
-        const impostors = room.players.filter(pl => !pl.knowsWord && !pl.isKamikaze);
         const isImpostor = (pl) => !pl.knowsWord && !pl.isKamikaze;
+        const isKamikaze = (pl) => pl.isKamikaze;
 
         const correct = normalize(guess) === normalize(room.word);
-
         let msg = "";
+
         if (correct) {
             msg = `${p.nickname} odgadł hasło!`;
-            room.players.forEach(pl => room.scores[pl.id] = 0);
-            room.scores[p.id] = 1;
+            room.scores[p.id] = (room.scores[p.id] || 0) + 1;
         } else {
             msg = `${p.nickname} pomylił się.`;
-            if (room.forcedMode === "double") {
-                impostors.forEach(pl => {
-                    if (pl.id !== p.id) room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+
+            if (room.forcedMode === "classic") {
+                room.players.filter(p => !isImpostor(p)).forEach(p => {
+                    room.scores[p.id] = (room.scores[p.id] || 0) + 1;
                 });
-                room.players.forEach(pl => {
-                    if (!isImpostor(pl)) room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+            }
+            else if (room.forcedMode === "double") {
+                room.players.filter(p => p.id !== socket.id).forEach(p => {
+                    room.scores[p.id] = (room.scores[p.id] || 0) + 1;
                 });
-            } else {
-                room.players.forEach(pl => {
-                    if (!isImpostor(pl)) room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+            }
+            else if (room.forcedMode === "kamikaze") {
+                room.players.filter(p => !isImpostor(p) && !isKamikaze(p)).forEach(p => {
+                    room.scores[p.id] = (room.scores[p.id] || 0) + 1;
                 });
             }
         }
