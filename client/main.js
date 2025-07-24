@@ -1,4 +1,4 @@
-const socket = io("https://impostor-server-wmgt.onrender.com"); // ← Twój adres!
+const socket = io("https://impostor-server-wmgt.onrender.com"); // ← ZMIEŃ na swój adres z Rendera jeśli inny
 
 const app = document.getElementById("app");
 
@@ -16,18 +16,28 @@ let state = {
 // Widok startowy
 function renderHome() {
     app.innerHTML = `
-    <div class="text-center">
+    <div class="text-center max-w-md mx-auto">
       <h1 class="text-3xl font-bold mb-4">🎭 Impostor Online</h1>
       <input id="nickname" placeholder="Twoje imię" class="mb-2 px-3 py-2 text-black w-full rounded" />
       <div class="mb-2">Wybierz kolor:</div>
-      <div class="flex justify-center mb-4" id="colors">
+      <div class="flex justify-center mb-2 flex-wrap gap-2" id="colors">
         ${["red", "blue", "green", "yellow", "purple", "orange"].map(c => `
-          <div class="w-8 h-8 rounded-full bg-${c}-500 mx-1 cursor-pointer border-2" data-color="${c}"></div>
+          <div class="w-8 h-8 rounded-full bg-${c}-500 cursor-pointer border-2" data-color="${c}"></div>
         `).join('')}
       </div>
-      <button id="createBtn" class="bg-green-500 px-4 py-2 rounded mr-2">Stwórz pokój</button>
-      <input id="joinCode" placeholder="Kod pokoju" class="px-3 py-2 text-black w-1/2 rounded" />
-      <button id="joinBtn" class="bg-blue-500 px-4 py-2 rounded mt-2">Dołącz</button>
+      <div class="mb-2">Tryb gry:</div>
+      <select id="modeSelect" class="text-black px-3 py-2 rounded w-full mb-4">
+        <option value="random">🎲 Losowy</option>
+        <option value="classic">🕵️ Klasyczny (1 impostor)</option>
+        <option value="double">🕵️🕵️ Podwójny impostor</option>
+        <option value="chaos">🤯 Chaos (losowe role)</option>
+        <option value="all_impostors">😈 Wszyscy impostorzy</option>
+        <option value="all_know">📢 Wszyscy znają hasło</option>
+        <option value="kamikaze">💣 Kamikaze</option>
+      </select>
+      <button id="createBtn" class="bg-green-500 px-4 py-2 rounded w-full mb-2">Stwórz pokój</button>
+      <input id="joinCode" placeholder="Kod pokoju" class="px-3 py-2 text-black w-full rounded mb-2" />
+      <button id="joinBtn" class="bg-blue-500 px-4 py-2 rounded w-full">Dołącz</button>
     </div>
   `;
 
@@ -41,9 +51,10 @@ function renderHome() {
 
     document.getElementById("createBtn").onclick = () => {
         const nickname = document.getElementById("nickname").value.trim();
+        const selectedMode = document.getElementById("modeSelect").value;
         if (!nickname || !state.color) return alert("Wpisz imię i wybierz kolor!");
         state.nickname = nickname;
-        socket.emit("createRoom", nickname, state.color, (res) => {
+        socket.emit("createRoom", nickname, state.color, selectedMode, (res) => {
             if (res.success) {
                 state.roomCode = res.roomCode;
                 renderLobby();
@@ -66,9 +77,11 @@ function renderHome() {
 
 function renderLobby() {
     app.innerHTML = `
-    <h2 class="text-xl font-semibold mb-2">Pokój: ${state.roomCode}</h2>
-    <div id="playerList" class="grid grid-cols-2 gap-2 mb-4"></div>
-    <button id="startBtn" class="bg-green-500 px-4 py-2 rounded">Rozpocznij grę</button>
+    <div class="text-center max-w-md mx-auto">
+      <h2 class="text-xl font-semibold mb-2">Pokój: ${state.roomCode}</h2>
+      <div id="playerList" class="grid grid-cols-2 gap-2 mb-4"></div>
+      <button id="startBtn" class="bg-green-500 px-4 py-2 rounded w-full">Rozpocznij grę</button>
+    </div>
   `;
 
     document.getElementById("startBtn").onclick = () => {
@@ -89,13 +102,11 @@ function renderPlayerList(players) {
   `).join('');
 }
 
-// Odbiór listy graczy – dostępne u każdego
 socket.on("playerList", players => {
     state.players = players;
     renderPlayerList(players);
 });
 
-// Odbiór roli po starcie gry
 socket.on("yourRole", ({ knowsWord, word, isKamikaze }) => {
     state.knowsWord = knowsWord;
     state.word = word;
@@ -105,7 +116,7 @@ socket.on("yourRole", ({ knowsWord, word, isKamikaze }) => {
 
 function renderRole() {
     app.innerHTML = `
-    <div class="text-center">
+    <div class="text-center max-w-md mx-auto">
       <h2 class="text-2xl font-bold mb-4">Twoja rola</h2>
       ${state.knowsWord
             ? `<p class="mb-2">✅ Znasz hasło:</p><p class="text-xl font-mono mb-4">"${state.word}"</p>`
@@ -115,7 +126,7 @@ function renderRole() {
             ? `<p class="text-red-400 font-bold mb-4">💣 Jesteś Kamikaze – blefuj jak impostor!</p>`
             : ""
         }
-      <button class="bg-blue-500 px-4 py-2 rounded" id="continueBtn">Rozpocznij dyskusję</button>
+      <button class="bg-blue-500 px-4 py-2 rounded w-full" id="continueBtn">Rozpocznij dyskusję</button>
     </div>
   `;
 
@@ -124,8 +135,10 @@ function renderRole() {
 
 function renderVoting() {
     app.innerHTML = `
-    <h2 class="text-xl font-bold mb-2">🗳️ Głosuj na impostora</h2>
-    <div id="voteList" class="grid grid-cols-2 gap-2 mb-4"></div>
+    <div class="text-center max-w-md mx-auto">
+      <h2 class="text-xl font-bold mb-2">🗳️ Głosuj na impostora</h2>
+      <div id="voteList" class="grid grid-cols-2 gap-2 mb-4"></div>
+    </div>
   `;
 
     const list = document.getElementById("voteList");
@@ -138,19 +151,19 @@ function renderVoting() {
             if (state.voted) return;
             state.voted = true;
             socket.emit("submitVote", state.roomCode, btn.dataset.id);
-            app.innerHTML = `<p class="text-center text-lg">Czekamy na głosy pozostałych graczy...</p>`;
+            app.innerHTML = `<p class="text-center text-lg">🕐 Czekamy na głosy pozostałych graczy...</p>`;
         };
     });
 }
 
 socket.on("voteResults", ({ votedOut }) => {
     app.innerHTML = `
-    <div class="text-center">
+    <div class="text-center max-w-md mx-auto">
       <h2 class="text-2xl font-bold mb-4">🧾 Wyniki głosowania</h2>
       <p>Najwięcej głosów otrzymał:</p>
       <p class="text-xl font-bold text-${votedOut.color}-400 mt-2">${votedOut.nickname}</p>
       <p class="mt-4">${votedOut.knowsWord ? "❌ Był niewinny!" : "✅ To był impostor!"}</p>
-      <button onclick="location.reload()" class="bg-green-600 mt-6 px-4 py-2 rounded">Nowa gra</button>
+      <button onclick="location.reload()" class="bg-green-600 mt-6 px-4 py-2 rounded w-full">Nowa gra</button>
     </div>
   `;
 });
