@@ -1,4 +1,4 @@
-const socket = io("https://impostor-server-wmgt.onrender.com"); // Twój serwer z Render
+const socket = io("https://impostor-server-wmgt.onrender.com"); // ← Twój adres!
 
 const app = document.getElementById("app");
 
@@ -9,16 +9,11 @@ let state = {
     players: [],
     knowsWord: false,
     word: "",
+    isKamikaze: false,
     voted: false,
 };
 
-// Logi debugujące
-console.log("Łączenie z serwerem...");
-
-socket.on("connect", () => console.log("✅ Połączono z serwerem"));
-socket.on("connect_error", err => console.error("❌ Błąd połączenia:", err));
-
-// Główna strona
+// Widok startowy
 function renderHome() {
     app.innerHTML = `
     <div class="text-center">
@@ -48,17 +43,11 @@ function renderHome() {
         const nickname = document.getElementById("nickname").value.trim();
         if (!nickname || !state.color) return alert("Wpisz imię i wybierz kolor!");
         state.nickname = nickname;
-
-        console.log("👉 Tworzenie pokoju", nickname, state.color);
-
         socket.emit("createRoom", nickname, state.color, (res) => {
-            console.log("🔁 Odpowiedź serwera createRoom:", res);
             if (res.success) {
                 state.roomCode = res.roomCode;
                 renderLobby();
-            } else {
-                alert(res.error);
-            }
+            } else alert(res.error);
         });
     };
 
@@ -68,7 +57,6 @@ function renderHome() {
         if (!nickname || !state.color || !code) return alert("Uzupełnij wszystkie dane!");
         state.nickname = nickname;
         state.roomCode = code;
-
         socket.emit("joinRoom", code, nickname, state.color, (res) => {
             if (res.success) renderLobby();
             else alert(res.error);
@@ -83,25 +71,35 @@ function renderLobby() {
     <button id="startBtn" class="bg-green-500 px-4 py-2 rounded">Rozpocznij grę</button>
   `;
 
-    socket.on("playerList", players => {
-        state.players = players;
-        const list = document.getElementById("playerList");
-        list.innerHTML = players.map(p => `
-      <div class="flex items-center space-x-2">
-        <div class="w-4 h-4 rounded-full bg-${p.color}-500"></div>
-        <span>${p.nickname}</span>
-      </div>
-    `).join('');
-    });
-
     document.getElementById("startBtn").onclick = () => {
         socket.emit("startGame", state.roomCode);
     };
+
+    renderPlayerList(state.players);
 }
 
-socket.on("yourRole", ({ knowsWord, word }) => {
+function renderPlayerList(players) {
+    const list = document.getElementById("playerList");
+    if (!list) return;
+    list.innerHTML = players.map(p => `
+    <div class="flex items-center space-x-2">
+      <div class="w-4 h-4 rounded-full bg-${p.color}-500"></div>
+      <span>${p.nickname}</span>
+    </div>
+  `).join('');
+}
+
+// Odbiór listy graczy – dostępne u każdego
+socket.on("playerList", players => {
+    state.players = players;
+    renderPlayerList(players);
+});
+
+// Odbiór roli po starcie gry
+socket.on("yourRole", ({ knowsWord, word, isKamikaze }) => {
     state.knowsWord = knowsWord;
     state.word = word;
+    state.isKamikaze = isKamikaze || false;
     renderRole();
 });
 
@@ -111,7 +109,12 @@ function renderRole() {
       <h2 class="text-2xl font-bold mb-4">Twoja rola</h2>
       ${state.knowsWord
             ? `<p class="mb-2">✅ Znasz hasło:</p><p class="text-xl font-mono mb-4">"${state.word}"</p>`
-            : `<p class="mb-4">🚨 Jesteś impostorem! Blefuj dobrze.</p>`}
+            : `<p class="mb-4">🚨 Jesteś impostorem! Blefuj dobrze.</p>`
+        }
+      ${state.isKamikaze
+            ? `<p class="text-red-400 font-bold mb-4">💣 Jesteś Kamikaze – blefuj jak impostor!</p>`
+            : ""
+        }
       <button class="bg-blue-500 px-4 py-2 rounded" id="continueBtn">Rozpocznij dyskusję</button>
     </div>
   `;
