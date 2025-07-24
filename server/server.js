@@ -1,4 +1,3 @@
-// server.js
 const express = require("express");
 const http = require("http");
 const { Server } = require("socket.io");
@@ -23,12 +22,12 @@ function normalize(str) {
 io.on("connection", (socket) => {
     console.log("🔌 Połączono:", socket.id);
 
-    socket.on("createRoom", (nickname, color, mode, avatar, callback) => {
+    socket.on("createRoom", (nickname, color, avatar, callback) => {
         const code = Math.random().toString(36).slice(2, 6).toUpperCase();
         rooms[code] = {
             players: [],
             gameStarted: false,
-            forcedMode: mode !== "random" ? mode : null,
+            forcedMode: null,
             round: 0,
             scores: {},
             word: "",
@@ -53,7 +52,7 @@ io.on("connection", (socket) => {
         io.to(code).emit("playerList", room.players);
     });
 
-    socket.on("startGame", (code) => {
+    socket.on("startGame", (code, selectedMode) => {
         const room = rooms[code];
         if (!room || room.players.length < 2 || room.ownerId !== socket.id) return;
         room.gameStarted = true;
@@ -61,12 +60,13 @@ io.on("connection", (socket) => {
         room.guessed = false;
         room.word = wordList[Math.floor(Math.random() * wordList.length)];
         room.round++;
+        room.forcedMode = selectedMode;
 
         const modeStr = room.forcedMode;
         const mode = modeStr === "classic" ? GameMode.CLASSIC :
             modeStr === "double" ? GameMode.DOUBLE :
-                modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
-                    GameMode.CHAOS;
+            modeStr === "kamikaze" ? GameMode.CLASSIC_KAMIKAZE :
+            GameMode.CHAOS;
 
         const players = room.players.slice().sort(() => Math.random() - 0.5);
         const roles = {};
@@ -125,18 +125,38 @@ io.on("connection", (socket) => {
 
             const pl = room.players.find(p => p.id === votedOut);
             let msg = "";
-
+            const impostors = room.players.filter(p => !p.knowsWord && !p.isKamikaze);
             const isImpostor = (p) => !p.knowsWord && !p.isKamikaze;
             const isKamikaze = (p) => p.isKamikaze;
 
             if (pl && isImpostor(pl)) {
                 msg = "✅ Impostor wykryty!";
-                room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
+
+                if (room.forcedMode === "double") {
+                    const other = impostors.find(p => p.id !== pl.id);
+                    if (other) {
+                        room.scores[other.id] = (room.scores[other.id] || 0) + 1;
+                    }
+                } else {
+                    room.players.forEach(p => {
+                        if (!isImpostor(p) && !isKamikaze(p)) {
+                            room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+                        }
+                    });
+                }
             } else if (pl && isKamikaze(pl)) {
                 msg = "💣 Kamikaze wykryty!";
                 room.scores[pl.id] = (room.scores[pl.id] || 0) + 1;
             } else {
                 msg = "❌ Głosowanie nie trafiło w impostora.";
+                if (room.forcedMode === "double") {
+                    impostors.forEach(p => {
+                        room.scores[p.id] = (room.scores[p.id] || 0) + 1;
+                    });
+                } else {
+                    const imp = room.players.find(p => isImpostor(p));
+                    if (imp) room.scores[imp.id] = (room.scores[imp.id] || 0) + 1;
+                }
             }
 
             const summary = room.players.map(p => ({
@@ -161,7 +181,8 @@ io.on("connection", (socket) => {
     });
 
     socket.on("guessWord", (code, guess) => {
-        const room = rooms[code], p = room.players.find(x => x.id === socket.id);
+        const room = rooms[code];
+        const p = room.players.find(x => x.id === socket.id);
         if (!room || room.guessed || !p) return;
 
         const correct = normalize(guess) === normalize(room.word);

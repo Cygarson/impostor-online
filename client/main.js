@@ -1,3 +1,4 @@
+// main.js
 const socket = io("https://impostor-server-wmgt.onrender.com");
 const app = document.getElementById("app");
 
@@ -56,13 +57,6 @@ function renderHome() {
           <img src="avatars/${avatar}" data-avatar="${avatar}" class="w-10 h-10 rounded-full border-2 cursor-pointer" />
         `).join('')}
       </div>
-      <select id="modeSelect" class="mb-2">
-        <option value="random">🎲 Losowy</option>
-        <option value="classic">🕵️ Klasyczny</option>
-        <option value="double">🕵️🕵️ Podwójny</option>
-        <option value="chaos">🤯 Chaos</option>
-        <option value="kamikaze">💣 Kamikaze</option>
-      </select>
       <button id="createBtn">Stwórz pokój</button>
       <input id="joinCode" placeholder="Kod pokoju" class="mt-2" />
       <button id="joinBtn">Dołącz</button>
@@ -89,10 +83,9 @@ function renderHome() {
 
     document.getElementById("createBtn").onclick = () => {
         const nickname = document.getElementById("nickname").value.trim();
-        const selectedMode = document.getElementById("modeSelect").value;
         if (!nickname || !state.color) return alert("Wpisz imię i wybierz kolor!");
         state.nickname = nickname;
-        socket.emit("createRoom", nickname, state.color, selectedMode, state.avatar, (res) => {
+        socket.emit("createRoom", nickname, state.color, state.avatar, (res) => {
             if (res.success) {
                 state.roomCode = res.roomCode;
                 state.ownerId = socket.id;
@@ -127,8 +120,7 @@ function renderLobby() {
             <option value="double">🕵️🕵️ Podwójny</option>
             <option value="chaos">🤯 Chaos</option>
             <option value="kamikaze">💣 Kamikaze</option>
-          </select>` : ""
-        }
+          </select>` : ""}
       </div>
       <div id="playerList" class="grid grid-cols-2 gap-4 mb-4"></div>
       ${socket.id === state.ownerId ? '<button id="startBtn">Rozpocznij grę</button>' : '<p class="text-gray-500">Czekaj na rozpoczęcie gry...</p>'}
@@ -142,7 +134,6 @@ function renderLobby() {
             alert("❗ Musisz mieć co najmniej 2 graczy, aby rozpocząć grę.");
             return;
         }
-
         const modeSelect = document.getElementById("modeSelect");
         const selectedMode = modeSelect ? modeSelect.value : "random";
         state.currentMode = selectedMode;
@@ -154,6 +145,7 @@ function renderLobby() {
 }
 
 function renderPlayerList(players) {
+    state.players = players;
     const list = document.getElementById("playerList");
     if (!list) return;
     list.innerHTML = players.map(p => `
@@ -167,7 +159,6 @@ function renderPlayerList(players) {
 }
 
 socket.on("playerList", players => {
-    state.players = players;
     renderPlayerList(players);
 });
 
@@ -226,6 +217,7 @@ function renderVoting() {
       ${renderLeaveButton()}
     </div>
   `;
+
     const list = document.getElementById("voteList");
     list.innerHTML = state.players
         .filter(p => p.id !== socket.id)
@@ -290,8 +282,7 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
   `;
 
     if (socket.id === state.ownerId) {
-        const nextBtn = document.getElementById("nextBtn");
-        nextBtn.onclick = () => {
+        document.getElementById("nextBtn").onclick = () => {
             const selectedMode = document.getElementById("modeSelect").value;
             state.currentMode = selectedMode;
             socket.emit("nextRound", state.roomCode, selectedMode);
@@ -302,7 +293,7 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
 });
 
 socket.on("startGameRequest", () => {
-    socket.emit("startGame", state.roomCode);
+    socket.emit("startGame", state.roomCode, state.currentMode);
 });
 
 renderHome();
