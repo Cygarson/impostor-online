@@ -25,7 +25,7 @@ let state = {
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
 
 function renderLeaveButton() {
-    return `<button id="leaveBtn" class="cosmic-btn btn-danger">🚪 Opuść pokój</button>`;
+    return `<button id="leaveBtn" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded mt-2">🚪 Opuść pokój</button>`;
 }
 
 function handleLeave() {
@@ -35,27 +35,27 @@ function handleLeave() {
 
 function renderHome() {
     app.innerHTML = `
-    <div class="space-panel">
-      <h1 class="float">🎭 Impostor Online</h1>
-      <input id="nickname" placeholder="Twoje imię" class="galaxy-input" />
-      <div class="mb-4 text-amber-200">Wybierz kolor:</div>
-      <div class="flex justify-center mb-4 flex-wrap gap-2" id="colors">
+    <div class="text-center max-w-lg mx-auto">
+      <h1 class="text-3xl font-bold mb-4">🎭 Impostor Online</h1>
+      <input id="nickname" placeholder="Twoje imię" class="mb-2 w-full p-2 rounded border border-amber-300 bg-amber-50 text-amber-800" />
+      <div class="mb-2 text-amber-200">Wybierz kolor:</div>
+      <div class="flex justify-center mb-2 flex-wrap gap-2" id="colors">
         ${["red", "blue", "green", "yellow", "purple", "rose"].map(c => `
-          <div class="w-10 h-10 rounded-full bg-${c}-500 cursor-pointer border-2 border-white hover:border-amber-300" data-color="${c}"></div>
+          <div class="w-8 h-8 rounded-full bg-${c}-500 cursor-pointer border-2 border-white hover:border-amber-300" data-color="${c}"></div>
         `).join('')}
       </div>
-      <div class="mb-4 text-amber-200">Wybierz awatara:</div>
-      <div class="flex justify-center mb-4 flex-wrap gap-2" id="avatars">
+      <div class="mb-2 text-amber-200">Wybierz awatara:</div>
+      <div class="flex justify-center mb-2 flex-wrap gap-2" id="avatars">
         ${avatarList.map(avatar => `
-          <img src="avatars/${avatar}" data-avatar="${avatar}" class="avatar cursor-pointer" />
+          <img src="avatars/${avatar}" data-avatar="${avatar}" class="w-10 h-10 rounded-full border-2 border-amber-300 cursor-pointer hover:border-rose-400" />
         `).join('')}
       </div>
-      <button id="createBtn" class="cosmic-btn">
+      <button id="createBtn" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded w-full mb-2">
         Stwórz pokój
       </button>
       <div class="flex gap-2 mt-4">
-        <input id="joinCode" placeholder="Kod pokoju" class="galaxy-input flex-grow" />
-        <button id="joinBtn" class="cosmic-btn">
+        <input id="joinCode" placeholder="Kod pokoju" class="flex-grow p-2 rounded border border-amber-300 bg-amber-50 text-amber-800" />
+        <button id="joinBtn" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded">
           Dołącz
         </button>
       </div>
@@ -108,12 +108,12 @@ function renderHome() {
 
 function renderLobby() {
     app.innerHTML = `
-    <div class="space-panel">
-      <h2>Pokój: ${state.roomCode}</h2>
+    <div class="text-center max-w-lg mx-auto">
+      <h2 class="text-2xl font-bold mb-4 text-amber-300">Pokój: ${state.roomCode}</h2>
       <div class="flex justify-between items-center mb-4">
         <span id="playerCounter" class="text-amber-200">👥 Graczy: ${state.players.length}</span>
         ${socket.id === state.ownerId ? `
-          <select id="modeSelect" class="galaxy-input">
+          <select id="modeSelect" class="bg-amber-700 text-amber-100 border border-amber-500 rounded px-2 py-1">
             <option value="random">🎲 Losowy</option>
             <option value="classic">🕵️ Klasyczny</option>
             <option value="double">🕵️🕵️ Podwójny</option>
@@ -121,10 +121,10 @@ function renderLobby() {
             <option value="kamikaze">💣 Kamikaze</option>
           </select>` : ""}
       </div>
-      <div class="player-list-grid" id="playerList"></div>
+      <div id="playerList" class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 text-left px-2"></div>
       ${socket.id === state.ownerId ?
-            '<button id="startBtn" class="cosmic-btn">Rozpocznij grę</button>' :
-            '<p class="text-center">Czekaj na rozpoczęcie gry...</p>'}
+            '<button id="startBtn" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded w-full">Rozpocznij grę</button>' :
+            '<p class="text-amber-400">Czekaj na rozpoczęcie gry...</p>'}
       ${renderLeaveButton()}
     </div>
   `;
@@ -150,8 +150,8 @@ function renderPlayerList(players) {
     const list = document.getElementById("playerList");
     if (!list) return;
     list.innerHTML = players.map(p => `
-    <div class="player-item">
-      <img src="avatars/${p.avatar || 'alien.png'}" alt="avatar" class="avatar" />
+    <div class="flex items-center gap-2 bg-amber-800 p-2 rounded-lg">
+      <img src="avatars/${p.avatar || 'alien.png'}" alt="avatar" class="w-8 h-8 rounded-full border border-amber-400" />
       <span class="text-${p.color}-400 font-semibold">${p.nickname}</span>
     </div>
   `).join('');
@@ -186,9 +186,9 @@ socket.on("yourRole", ({ knowsWord, word, isKamikaze, speakOrder }) => {
 function renderSpeakOrder() {
     if (!state.speakOrder.length) return '';
     return `
-      <div class="mb-4">
-        <h3>📢 Kolejność wypowiedzi:</h3>
-        <ol class="star-list">
+      <div class="mb-4 p-3 bg-amber-800 rounded-lg border border-amber-600">
+        <h3 class="text-lg font-semibold mb-2 text-amber-300">📢 Kolejność wypowiedzi:</h3>
+        <ol class="list-decimal list-inside text-left bg-amber-900 p-3 rounded-md">
           ${state.speakOrder.map((p, i) => `
             <li class="p-1 mb-1 flex items-center gap-2">
               <span class="text-amber-400">${i + 1}.</span>
@@ -209,8 +209,8 @@ function renderRole() {
     const isOwner = socket.id === state.ownerId;
 
     app.innerHTML = `
-    <div class="space-panel relative" id="roleScreen">
-      <h2>Twoja rola</h2>
+    <div class="text-center max-w-lg mx-auto relative" id="roleScreen">
+      <h2 class="text-2xl font-bold mb-4 text-amber-300">Twoja rola</h2>
       <button id="toggleVisibility" class="absolute top-4 right-4 p-2 bg-amber-700 rounded-full">
         <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${state.roleVisible ? 'M15 12a3 3 0 11-6 0 3 3 0 016 0z' : 'M13.875 18.825A10.05 10.05 0 0112 19c-4.478 0-8.268-2.943-9.543-7a9.97 9.97 0 011.563-3.029m5.858.908a3 3 0 114.243 4.243M9.878 9.878l4.242 4.242M9.88 9.88l-3.29-3.29m7.532 7.532l3.29 3.29M3 3l3.59 3.59m0 0A9.953 9.953 0 0112 5c4.478 0 8.268 2.943 9.543 7a10.025 10.025 0 01-4.132 5.411m0 0L21 21'}"/>
@@ -219,34 +219,34 @@ function renderRole() {
       ${renderSpeakOrder()}
       ${state.roleVisible ? `
         ${state.knowsWord ? `
-          <div class="knows-word">
-            <p class="mb-2">✅ Znasz hasło:</p>
-            <p class="text-xl font-mono font-bold">"${state.word}"</p>
+          <div class="mb-4 p-3 bg-amber-800 rounded-lg">
+            <p class="text-amber-200 mb-2">✅ Znasz hasło:</p>
+            <p class="text-xl font-mono font-bold text-amber-100">"${state.word}"</p>
           </div>` : ``}
-        ${state.isImpostor ? `<p class="impostor-alert">🚨 Jesteś impostorem!</p>` : ``}
-        ${state.isKamikaze ? `<p class="impostor-alert">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
+        ${state.isImpostor ? `<p class="text-red-400 font-bold mb-4 p-3 bg-amber-800 rounded-lg">🚨 Jesteś impostorem!</p>` : ``}
+        ${state.isKamikaze ? `<p class="text-rose-400 font-bold mb-4 p-3 bg-amber-800 rounded-lg">💣 Kamikaze – blefuj jak impostor.</p>` : ``}
         ${state.isImpostor && !state.guessUsed ? `
           <div class="mt-4">
-            <input id="guessInput" placeholder="Zgadnij hasło" class="galaxy-input" />
-            <button id="guessBtn" class="cosmic-btn">
+            <input id="guessInput" placeholder="Zgadnij hasło" class="w-full p-2 rounded border border-amber-300 bg-amber-800 text-amber-100 mb-2" />
+            <button id="guessBtn" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded w-full">
               Zgłoś hasło
             </button>
           </div>
         ` : ``}
       ` : `
         <div class="mb-4 p-3 bg-amber-800 rounded-lg">
-          <p class="text-center">👀 Rola ukryta</p>
+          <p class="text-amber-200">👀 Rola ukryta</p>
         </div>
       `}
       ${isOwner ? `
-        <button class="cosmic-btn" id="continueBtn">
+        <button class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded w-full mb-2" id="continueBtn">
           Rozpocznij głosowanie
         </button>
-        <button class="cosmic-btn btn-warning" id="skipBtn">
+        <button class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded w-full" id="skipBtn">
           ⏭️ Pomijaj rundę
         </button>
       ` : `
-        <p class="text-center">Czekaj na rozpoczęcie głosowania...</p>
+        <p class="text-amber-400 p-3 bg-amber-800 rounded-lg mb-4">Czekaj na rozpoczęcie głosowania...</p>
       `}
       ${renderLeaveButton()}
     </div>
@@ -286,24 +286,24 @@ function renderVoting() {
     state.votedPlayers = [];
 
     app.innerHTML = `
-    <div class="space-panel">
-      <h2>🗳️ Głosuj na impostora</h2>
-      <div class="mb-4">
-        <h3>👥 Status graczy:</h3>
-        <div id="playerStatus" class="grid grid-cols-1 gap-2"></div>
+    <div class="text-center max-w-lg mx-auto">
+      <h2 class="text-xl font-bold mb-2 text-amber-300">🗳️ Głosuj na impostora</h2>
+      <div class="mb-4 p-3 bg-amber-800 rounded-lg border border-amber-600">
+        <h3 class="text-lg font-semibold mb-2 text-amber-300">👥 Status graczy:</h3>
+        <div id="playerStatus" class="grid grid-cols-1 gap-2 text-left"></div>
       </div>
       
       ${state.voted ? `
-        <div class="vote-confirmation">
-          <p>✅ Twój głos został oddany!</p>
-          <p>Czekamy na pozostałych graczy...</p>
+        <div class="p-4 bg-amber-900 rounded-lg mb-4">
+          <p class="text-amber-200">✅ Twój głos został oddany!</p>
+          <p class="text-amber-300">Czekamy na pozostałych graczy...</p>
         </div>
       ` : `
         <div id="voteList" class="grid grid-cols-2 gap-3 mb-4"></div>
       `}
       
       ${socket.id === state.ownerId ? `
-        <button id="skipBtn" class="cosmic-btn btn-warning">
+        <button id="skipBtn" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded w-full mb-2">
           ⏭️ Pomijaj rundę
         </button>
       ` : ``}
@@ -320,12 +320,9 @@ function renderVoting() {
     document.getElementById("leaveBtn").onclick = handleLeave;
 
     if (socket.id === state.ownerId) {
-        const skipBtn = document.getElementById("skipBtn");
-        if (skipBtn) {
-            skipBtn.onclick = () => {
-                socket.emit("skipRound", state.roomCode);
-            };
-        }
+        document.getElementById("skipBtn").onclick = () => {
+            socket.emit("skipRound", state.roomCode);
+        };
     }
 }
 
@@ -336,10 +333,10 @@ function renderPlayerStatus() {
     statusContainer.innerHTML = state.players.map(p => {
         const hasVoted = state.votedPlayers.includes(p.id);
         return `
-        <div class="player-status ${hasVoted ? 'voted' : ''}">
-          <img src="avatars/${p.avatar || 'alien.png'}" class="avatar" />
-          <span class="text-${p.color}-400">${p.nickname}</span>
-          ${hasVoted ? `<span class="vote-check">✓</span>` : ''}
+        <div class="flex items-center gap-2 p-2 rounded ${hasVoted ? 'bg-amber-900' : ''}">
+          <img src="avatars/${p.avatar || 'alien.png'}" class="w-8 h-8 rounded-full" />
+          <span class="text-${p.color}-400 font-medium flex-grow">${p.nickname}</span>
+          ${hasVoted ? `<span class="text-green-400 text-xl">✓</span>` : ''}
         </div>
       `;
     }).join('');
@@ -352,8 +349,8 @@ function renderVoteButtons() {
     list.innerHTML = state.players
         .filter(p => p.id !== socket.id)
         .map(p => `
-        <button class="cosmic-btn" data-id="${p.id}">
-          <img src="avatars/${p.avatar || 'alien.png'}" class="avatar" /> 
+        <button class="bg-${p.color}-600 hover:bg-${p.color}-700 text-white font-medium p-2 rounded-lg flex items-center justify-center gap-2" data-id="${p.id}">
+          <img src="avatars/${p.avatar || 'alien.png'}" class="w-6 h-6 rounded-full" /> 
           ${p.nickname}
         </button>
       `).join('');
@@ -382,20 +379,20 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
     players.forEach(p => state.scores[p.nickname] = p.score);
 
     app.innerHTML = `
-    <div class="space-panel">
-      <h2>🏁 Runda ${round} zakończona</h2>
-      <p class="mb-4 ${message.includes('✅') ? 'bg-green-900' : message.includes('❌') ? 'bg-red-900' : 'bg-amber-800'}">${message}</p>
-      <h3>🎮 Tryb gry: ${modeLabel(mode)}</h3>
-      <h3>🎯 Punktacja:</h3>
-      <ul class="star-list">
+    <div class="text-center max-w-lg mx-auto">
+      <h2 class="text-xl font-bold mb-2 text-amber-300">🏁 Runda ${round} zakończona</h2>
+      <p class="mb-4 p-3 rounded-lg ${message.includes('✅') ? 'bg-green-900 text-green-300' : message.includes('❌') ? 'bg-red-900 text-red-300' : 'bg-amber-800 text-amber-300'}">${message}</p>
+      <h3 class="text-md font-medium mb-1 text-amber-200">🎮 Tryb gry: ${modeLabel(mode)}</h3>
+      <h3 class="text-lg font-semibold mb-3 text-amber-300">🎯 Punktacja:</h3>
+      <ul class="mb-4 text-left">
         ${players.map(p => `
-          <li class="mb-2 p-3 flex items-center gap-3">
-            <img src="avatars/${p.avatar || 'alien.png'}" class="avatar" />
+          <li class="mb-2 p-3 rounded-lg bg-amber-800 flex items-center gap-3">
+            <img src="avatars/${p.avatar || 'alien.png'}" class="w-8 h-8 rounded-full" />
             <div>
-              <div class="font-bold">${p.nickname}</div>
+              <div class="text-amber-300 font-bold">${p.nickname}</div>
               <div class="flex items-center gap-2">
-                <span>${p.score} pkt</span>
-                <span class="text-xs px-2 py-1 rounded-full ${p.isImpostor ? 'bg-red-800' : p.isKamikaze ? 'bg-rose-800' : 'bg-green-800'}">
+                <span class="text-amber-200">${p.score} pkt</span>
+                <span class="text-xs px-2 py-1 rounded-full ${p.isImpostor ? 'bg-red-800 text-red-300' : p.isKamikaze ? 'bg-rose-800 text-rose-300' : 'bg-green-800 text-green-300'}">
                   ${p.isImpostor ? "Impostor" : p.isKamikaze ? "Kamikaze" : "Niewinny"}
                 </span>
               </div>
@@ -405,18 +402,18 @@ socket.on("roundEnd", ({ message, round, players, mode }) => {
       </ul>
       ${socket.id === state.ownerId ? `
         <div class="mb-4">
-          <label for="modeSelect" class="block mb-2">Zmień tryb gry:</label>
-          <select id="modeSelect" class="galaxy-input">
+          <label for="modeSelect" class="block mb-2 font-medium text-amber-200">Zmień tryb gry:</label>
+          <select id="modeSelect" class="w-full bg-amber-700 text-amber-100 font-semibold px-3 py-2 rounded border border-amber-500">
             <option value="classic">🕵️ Klasyczny</option>
             <option value="double">🕵️🕵️ Podwójny</option>
             <option value="chaos">🤯 Chaos</option>
             <option value="kamikaze">💣 Kamikaze</option>
           </select>
         </div>
-        <button id="nextBtn" class="cosmic-btn">
+        <button id="nextBtn" class="bg-amber-600 hover:bg-amber-700 text-white font-bold py-2 px-4 rounded w-full">
           Graj dalej
         </button>` :
-            '<p class="text-center">Czekaj na decyzję właściciela pokoju...</p>'}
+            '<p class="text-amber-400 p-3 bg-amber-800 rounded-lg">Czekaj na decyzję właściciela pokoju...</p>'}
       ${renderLeaveButton()}
     </div>
   `;
