@@ -218,7 +218,6 @@ io.on("connection", (socket) => {
             }
 
             const summary = room.players.map(p => ({
-                id: p.id,
                 nickname: p.nickname,
                 color: p.color,
                 isImpostor: isImpostor(p),
@@ -274,7 +273,6 @@ io.on("connection", (socket) => {
         }
 
         const summary = room.players.map(pl => ({
-            id: pl.id,
             nickname: pl.nickname,
             color: pl.color,
             isImpostor: !pl.knowsWord && !pl.isKamikaze,
@@ -313,7 +311,6 @@ io.on("connection", (socket) => {
         if (!room || room.ownerId !== socket.id) return;
 
         const summary = room.players.map(p => ({
-            id: p.id,
             nickname: p.nickname,
             color: p.color,
             isImpostor: !p.knowsWord && !p.isKamikaze,
