@@ -171,6 +171,9 @@ io.on("connection", (socket) => {
 
         room.votes[socket.id] = votedId;
 
+        // Wyślij aktualizację o oddanych głosach
+        io.to(code).emit("updateVotes", Object.keys(room.votes));
+
         if (Object.keys(room.votes).length >= room.players.length) {
             const cnt = {};
             Object.values(room.votes).forEach(id => cnt[id] = (cnt[id] || 0) + 1);

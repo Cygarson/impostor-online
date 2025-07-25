@@ -188,3 +188,8 @@ select {
         transform: scale(1.1);
         background-color: #b45309;
     }
+
+/* Dodane style dla statusu graczy */
+#playerStatus div {
+    transition: background-color 0.3s ease;
+}

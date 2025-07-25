@@ -18,7 +18,8 @@ let state = {
     ownerId: "",
     currentMode: "",
     speakOrder: [],
-    roleVisible: true
+    roleVisible: true,
+    votedPlayers: [] // Dodano do śledzenia oddanych głosów
 };
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
@@ -246,14 +247,6 @@ function renderRole() {
         </button>
       ` : `
         <p class="text-amber-400 p-3 bg-amber-800 rounded-lg mb-4">Czekaj na rozpoczęcie głosowania...</p>
-        ${state.isImpostor && !state.guessUsed ? `
-          <div class="mt-4">
-            <input id="guessInput" placeholder="Zgadnij hasło" class="w-full p-2 rounded border border-amber-300 bg-amber-800 text-amber-100 mb-2" />
-            <button id="guessBtn" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded w-full">
-              Zgłoś hasło
-            </button>
-          </div>
-        ` : ``}
       `}
       ${renderLeaveButton()}
     </div>
@@ -290,10 +283,16 @@ socket.on("startVoting", () => {
 });
 
 function renderVoting() {
+    // Resetujemy listę głosujących przy wejściu na ekran
+    state.votedPlayers = [];
+
     app.innerHTML = `
     <div class="text-center max-w-lg mx-auto">
       <h2 class="text-xl font-bold mb-2 text-amber-300">🗳️ Głosuj na impostora</h2>
-      ${renderSpeakOrder()}
+      <div class="mb-4 p-3 bg-amber-800 rounded-lg border border-amber-600">
+        <h3 class="text-lg font-semibold mb-2 text-amber-300">👥 Gracze:</h3>
+        <div id="playerStatus" class="grid grid-cols-1 gap-2 text-left"></div>
+      </div>
       <div id="voteList" class="grid grid-cols-2 gap-3 mb-4"></div>
       ${socket.id === state.ownerId ? `
         <button id="skipBtn" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded w-full mb-2">
@@ -304,7 +303,38 @@ function renderVoting() {
     </div>
   `;
 
+    renderPlayerStatus();
+    renderVoteButtons();
+
+    document.getElementById("leaveBtn").onclick = handleLeave;
+
+    if (socket.id === state.ownerId) {
+        document.getElementById("skipBtn").onclick = () => {
+            socket.emit("skipRound", state.roomCode);
+        };
+    }
+}
+
+function renderPlayerStatus() {
+    const statusContainer = document.getElementById("playerStatus");
+    if (!statusContainer) return;
+
+    statusContainer.innerHTML = state.players.map(p => {
+        const hasVoted = state.votedPlayers.includes(p.id);
+        return `
+        <div class="flex items-center gap-2 p-2 rounded ${hasVoted ? 'bg-amber-900' : ''}">
+          <img src="avatars/${p.avatar || 'alien.png'}" class="w-8 h-8 rounded-full" />
+          <span class="text-${p.color}-400 font-medium flex-grow">${p.nickname}</span>
+          ${hasVoted ? `<span class="text-green-400">✓</span>` : ''}
+        </div>
+      `;
+    }).join('');
+}
+
+function renderVoteButtons() {
     const list = document.getElementById("voteList");
+    if (!list) return;
+
     list.innerHTML = state.players
         .filter(p => p.id !== socket.id)
         .map(p => `
@@ -324,15 +354,15 @@ function renderVoting() {
             </div>`;
         };
     });
-
-    document.getElementById("leaveBtn").onclick = handleLeave;
-
-    if (socket.id === state.ownerId) {
-        document.getElementById("skipBtn").onclick = () => {
-            socket.emit("skipRound", state.roomCode);
-        };
-    }
 }
+
+// Aktualizacja stanu głosowania
+socket.on("updateVotes", (voterIds) => {
+    state.votedPlayers = voterIds;
+    if (document.getElementById("playerStatus")) {
+        renderPlayerStatus();
+    }
+});
 
 socket.on("roundEnd", ({ message, round, players, mode }) => {
     state.round = round;
