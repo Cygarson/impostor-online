@@ -158,6 +158,12 @@ io.on("connection", (socket) => {
         io.to(code).emit("playerList", players);
     });
 
+    socket.on("startVoting", (code) => {
+        const room = rooms[code];
+        if (!room || room.ownerId !== socket.id) return;
+        io.to(code).emit("startVoting");
+    });
+
     socket.on("submitVote", (code, votedId) => {
         const room = rooms[code];
         if (!room) return;

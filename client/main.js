@@ -262,7 +262,9 @@ function renderRole() {
     document.getElementById("toggleVisibility").onclick = toggleRoleVisibility;
 
     if (isOwner) {
-        document.getElementById("continueBtn").onclick = renderVoting;
+        document.getElementById("continueBtn").onclick = () => {
+            socket.emit("startVoting", state.roomCode);
+        };
         document.getElementById("skipBtn").onclick = () => {
             socket.emit("skipRound", state.roomCode);
         };
@@ -283,20 +285,16 @@ function renderRole() {
     }
 }
 
+socket.on("startVoting", () => {
+    renderVoting();
+});
+
 function renderVoting() {
     app.innerHTML = `
     <div class="text-center max-w-lg mx-auto">
       <h2 class="text-xl font-bold mb-2 text-amber-300">🗳️ Głosuj na impostora</h2>
       ${renderSpeakOrder()}
       <div id="voteList" class="grid grid-cols-2 gap-3 mb-4"></div>
-      ${state.isImpostor && !state.guessUsed ? `
-        <div class="mb-4">
-          <input id="guessInput" placeholder="Zgadnij hasło" class="w-full p-2 rounded border border-amber-300 bg-amber-800 text-amber-100 mb-2" />
-          <button id="guessBtn" class="bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded w-full">
-            Zgłoś hasło
-          </button>
-        </div>
-      ` : ``}
       ${socket.id === state.ownerId ? `
         <button id="skipBtn" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded w-full mb-2">
           ⏭️ Pomijaj rundę
@@ -328,15 +326,6 @@ function renderVoting() {
     });
 
     document.getElementById("leaveBtn").onclick = handleLeave;
-
-    if (state.isImpostor && !state.guessUsed) {
-        document.getElementById("guessBtn").onclick = () => {
-            const guess = document.getElementById("guessInput").value.trim();
-            if (!guess) return;
-            socket.emit("guessWord", state.roomCode, guess);
-            state.guessUsed = true;
-        };
-    }
 
     if (socket.id === state.ownerId) {
         document.getElementById("skipBtn").onclick = () => {
