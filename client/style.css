@@ -189,7 +189,39 @@ select {
         background-color: #b45309;
     }
 
-/* Dodane style dla statusu graczy */
+/* Nowe style dla statusu graczy */
 #playerStatus div {
     transition: background-color 0.3s ease;
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+}
+
+#playerStatus .voted {
+    background-color: rgba(107, 114, 128, 0.2);
+}
+
+.vote-confirmation {
+    background-color: rgba(16, 185, 129, 0.15);
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.player-status-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.5rem;
+    border-radius: 0.5rem;
+    transition: background-color 0.3s;
+}
+
+    .player-status-item.voted {
+        background-color: rgba(107, 114, 128, 0.2);
+    }
+
+.vote-check {
+    color: #10b981;
+    font-weight: bold;
+    font-size: 1.25rem;
 }

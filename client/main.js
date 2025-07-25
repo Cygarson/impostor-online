@@ -19,7 +19,7 @@ let state = {
     currentMode: "",
     speakOrder: [],
     roleVisible: true,
-    votedPlayers: [] // Dodano do śledzenia oddanych głosów
+    votedPlayers: []
 };
 
 const avatarList = ["alien.png", "bear.png", "cat.png", "frog.png", "koala.png", "robot.png"];
@@ -283,17 +283,25 @@ socket.on("startVoting", () => {
 });
 
 function renderVoting() {
-    // Resetujemy listę głosujących przy wejściu na ekran
     state.votedPlayers = [];
 
     app.innerHTML = `
     <div class="text-center max-w-lg mx-auto">
       <h2 class="text-xl font-bold mb-2 text-amber-300">🗳️ Głosuj na impostora</h2>
       <div class="mb-4 p-3 bg-amber-800 rounded-lg border border-amber-600">
-        <h3 class="text-lg font-semibold mb-2 text-amber-300">👥 Gracze:</h3>
+        <h3 class="text-lg font-semibold mb-2 text-amber-300">👥 Status graczy:</h3>
         <div id="playerStatus" class="grid grid-cols-1 gap-2 text-left"></div>
       </div>
-      <div id="voteList" class="grid grid-cols-2 gap-3 mb-4"></div>
+      
+      ${state.voted ? `
+        <div class="p-4 bg-amber-900 rounded-lg mb-4">
+          <p class="text-amber-200">✅ Twój głos został oddany!</p>
+          <p class="text-amber-300">Czekamy na pozostałych graczy...</p>
+        </div>
+      ` : `
+        <div id="voteList" class="grid grid-cols-2 gap-3 mb-4"></div>
+      `}
+      
       ${socket.id === state.ownerId ? `
         <button id="skipBtn" class="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2 px-4 rounded w-full mb-2">
           ⏭️ Pomijaj rundę
@@ -304,7 +312,10 @@ function renderVoting() {
   `;
 
     renderPlayerStatus();
-    renderVoteButtons();
+
+    if (!state.voted) {
+        renderVoteButtons();
+    }
 
     document.getElementById("leaveBtn").onclick = handleLeave;
 
@@ -325,7 +336,7 @@ function renderPlayerStatus() {
         <div class="flex items-center gap-2 p-2 rounded ${hasVoted ? 'bg-amber-900' : ''}">
           <img src="avatars/${p.avatar || 'alien.png'}" class="w-8 h-8 rounded-full" />
           <span class="text-${p.color}-400 font-medium flex-grow">${p.nickname}</span>
-          ${hasVoted ? `<span class="text-green-400">✓</span>` : ''}
+          ${hasVoted ? `<span class="text-green-400 text-xl">✓</span>` : ''}
         </div>
       `;
     }).join('');
@@ -349,14 +360,11 @@ function renderVoteButtons() {
             if (state.voted) return;
             state.voted = true;
             socket.emit("submitVote", state.roomCode, btn.dataset.id);
-            app.innerHTML = `<div class="text-center p-8">
-                <p class="text-lg text-amber-300">🕐 Czekamy na głosy pozostałych graczy.</p>
-            </div>`;
+            renderVoting(); // Przeładuj ekran głosowania
         };
     });
 }
 
-// Aktualizacja stanu głosowania
 socket.on("updateVotes", (voterIds) => {
     state.votedPlayers = voterIds;
     if (document.getElementById("playerStatus")) {

@@ -170,8 +170,6 @@ io.on("connection", (socket) => {
         if (socket.id === votedId) return;
 
         room.votes[socket.id] = votedId;
-
-        // Wyślij aktualizację o oddanych głosach
         io.to(code).emit("updateVotes", Object.keys(room.votes));
 
         if (Object.keys(room.votes).length >= room.players.length) {
